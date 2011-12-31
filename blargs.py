@@ -33,7 +33,7 @@ def Config(filename, dictionary=None, overwrite=True):
 
 def get_arguments_from_proxy(f):
     def inner(*args, **kwargs):
-        self = args[0]
+#        self = args[0]
         new_args = []
         for arg in args[1:]:
             if isinstance(arg, ProxySetter):
@@ -221,8 +221,9 @@ class SingleWord(Argument):
 
 
 class Parser(object):
+    """ Command line parser. """
+
     def __init__(self, store=None, to_underscore=False, default_help=True):
-        # set by developer
         self.options = {}
         self.option_labels = {}
         self.required = {}
@@ -259,6 +260,7 @@ class Parser(object):
 
     @classmethod
     def with_locals(cls):
+        """ Create :class:Parser using locals() dict. """
         import inspect
         vals = inspect.currentframe().f_back.f_locals
 #        p = Parser(cls._get_locals_dict())
@@ -277,6 +279,9 @@ class Parser(object):
 
     @get_arguments_from_proxy
     def set_mutually_required(self, *names):
+        """ All arguments require each other; i.e., if any is specified, then
+        all must be specified. """
+
         s = set(names)
         for v in s:
             for vi in s:
@@ -287,6 +292,8 @@ class Parser(object):
 
     @get_arguments_from_proxy
     def set_at_least_one_required(self, *names):
+        """ At least one of the arguments is required. """
+
         s = set(names)
         for v in s:
             self.set_required(v, s - set([v]))
