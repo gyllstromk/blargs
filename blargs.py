@@ -1,5 +1,3 @@
-from bconfig import Config
-
 from itertools import starmap, permutations
 import sys
 
@@ -14,6 +12,23 @@ import sys
 #   * error is --one-flag not specified even if multiple are allowed
 #   * deal with difference between localized/non
 #   * enumeration type
+
+
+def Config(filename, dictionary=None, overwrite=True):
+    if dictionary is None:
+        dictionary = {}
+
+    for item in open(filename):
+        if item.startswith('#'):
+            continue
+
+        toks = item.rstrip().split()
+        if len(toks) == 2:
+            if dictionary.get(toks[0], None) is not None and not overwrite:
+                continue
+            dictionary.__setitem__(*toks)
+    
+    return dictionary
 
 
 def get_arguments_from_proxy(f):
