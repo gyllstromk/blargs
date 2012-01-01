@@ -1,7 +1,9 @@
+from functools import wraps
 from itertools import starmap, permutations
 import sys
 
 # Todo:
+#   replace config
 #   * don't overwrite existing namespace (e.g., function name assumed to be value)
 #   X fixed? * can't have multiple unspecified_default
 #   * dependency language (e.g. a -> b or c)
@@ -31,12 +33,16 @@ def Config(filename, dictionary=None, overwrite=True):
     return dictionary
 
 
-def get_arguments_from_proxy(f):
+# ---------- decorators ---------- #
+
+def names_to_options(f):
+    ''' Convert any option names to :class:`Option` objects. '''
+
+    @wraps(f)
     def inner(*args, **kwargs):
-#        self = args[0]
         new_args = []
         for arg in args[1:]:
-            if isinstance(arg, ProxySetter):
+            if isinstance(arg, Option):
                 arg = arg.argname
 
             new_args.append(arg)
@@ -47,6 +53,7 @@ def get_arguments_from_proxy(f):
 
 
 def verify_args_exist(f):
+    @wraps(f)
     def inner(*args, **kwargs):
         def raise_error(name):
             raise ValueError('%s not known' % name)
@@ -62,6 +69,7 @@ def verify_args_exist(f):
 
 
 def localize_all(f):
+    @wraps(f)
     def inner(*args, **kwargs):
         args = list(args)
         self = args[0]
@@ -77,6 +85,7 @@ def localize_all(f):
 
 
 def localize(f):
+    @wraps(f)
     def inner(*args, **kwargs):
         args = list(args)
         self = args[0]
@@ -87,9 +96,7 @@ def localize(f):
 
     return inner
 
-
-def user_print(fmt, args):
-    print fmt % args
+# ---------- end decorators ---------- #
 
 
 class Multidict(dict):
@@ -105,60 +112,127 @@ class Multidict(dict):
         v.append(value)
 
 
+# ---------- exceptions ---------- #
+
+
 class ArgumentError(ValueError):
-    """ Passed to user. """
+    ''' Passed to user. '''
     pass
 
 
 class FormatError(ArgumentError):
+    ''' Argument not formatted correctly. '''
     pass
 
 
 class MissingRequiredArgumentError(ArgumentError):
+    ''' Required argument not specified. '''
     pass
 
 
 class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
-    """ An argument out of a list of required is missing.
-    e.g., one of -a and -b is required and neither is specified. """
+    ''' An argument out of a list of required is missing.
+    e.g., one of -a and -b is required and neither is specified. '''
 
     def __init__(self, allowed):
         super(ManyAllowedNoneSpecifiedArgumentError, self).__init__('[%s] not specified' % ', '.join(allowed))
 
 
 class UnspecifiedArgumentError(ArgumentError):
-    """ User supplies argument that isn't specified. """
+    ''' User supplies argument that isn't specified. '''
 
     pass
 
 
 class MultipleSpecifiedArgumentError(ArgumentError):
+    ''' Multiple of the same argument specified. '''
     pass
 
 
 class DependencyError(ArgumentError):
+    ''' User specified an argument that requires another, unspecified argument. '''
     pass
 
 
 class ConflictError(ArgumentError):
+    ''' User specified an argument that conflicts another specified argument. '''
     pass
 
+# ---------- end exceptions ---------- #
 
-class ProxySetter(object):
+
+class Option(object):
     def __init__(self, argname, parser):
+        ''' Do not construct directly, as it will not be tethered to a
+        :class:`Parser` object and thereby will not be handled in argument
+        parsing. '''
+
         self.argname = argname
         self.parser = parser
 
     def requires(self, *others):
+        ''' Specifiy other options which this argument requires.
+
+        :param others: required options
+        :type others: sequence of either :class:`Option` or basestring of option names
+        '''
         [self.parser.set_requires(self.argname, x) for x in others]
         return self
 
     def conflicts(self, *others):
+        ''' Specifiy other options which this argument conflicts with.
+
+        :param others: conflicting options
+        :type others: sequence of either :class:`Option` or basestring of option names
+        '''
         [self.parser.set_conflicts(self.argname, x) for x in others]
         return self
 
+    def shorthand(self, alias):
+        ''' Set shorthand for this argument. Shorthand arguments are 1
+        character in length and are prefixed by a single '-'. For example:
 
-class Argument(object):
+        >>> parser.str('option').shorthand('o')
+
+        would cause '--option' and '-o' to be alias argument labels when invoked on the command line.
+
+        :param alias: alias of argument
+        '''
+
+        self.parser._add_shorthand(self.argname, alias)
+        return self
+
+    def default(self, value):
+        ''' Provide a default value for this argument. '''
+        self.parser.set_default(self.argname, value)
+        return self
+
+    def cast(self, cast):
+        ''' Provide a casting value for this argument. '''
+        self.parser._casts[self.argname] = cast
+        return self
+
+    def required(self):
+        ''' Indicate that this argument is required. '''
+
+        self.parser._set_required(self.argname)
+        return self
+
+    def unspecified_default(self):
+        ''' Indicate that values passed without argument labels will be
+        attributed to this argument. '''
+
+        self.parser._set_unspecified_default(self.argname)
+        return self
+
+    def multiple(self):
+        ''' Indicate that the argument can be specified multiple times. '''
+        self.parser.set_multiple(argname)
+
+# ---------- Argument readers ---------- #
+
+
+class _ArgumentReader(object):
     def __init__(self):
         self.value = None
         self._init()
@@ -174,7 +248,7 @@ class Argument(object):
         return None
 
 
-class MultiWordArgument(Argument):
+class _MultiWordArgumentReader(_ArgumentReader):
     def _init(self):
         self.value = []
 
@@ -188,7 +262,7 @@ class MultiWordArgument(Argument):
         return ' '.join(self.value)
 
 
-class FlagArgument(Argument):
+class _FlagArgumentReader(_ArgumentReader):
     def _init(self):
         self.value = True
 
@@ -203,7 +277,7 @@ class FlagArgument(Argument):
         return False
 
 
-class SingleWord(Argument):
+class _SingleWordReader(_ArgumentReader):
     def _init(self):
         self.value = None
 
@@ -220,15 +294,18 @@ class SingleWord(Argument):
         return self.value
 
 
+# ---------- Argument readers ---------- #
+
+
 class Parser(object):
-    """ Command line parser. """
+    ''' Command line parser. '''
 
     def __init__(self, store=None, to_underscore=False, default_help=True):
         self.options = {}
         self.option_labels = {}
-        self.required = {}
+        self._required = {}
         self.multiple = set()
-        self.casts = {}
+        self._casts = {}
         self.defaults = {}
         self.extras = []
         self._unspecified_default = None
@@ -242,7 +319,7 @@ class Parser(object):
         self._init_user_set(store)
 
         if default_help:
-            self.add_flag('help', alias='h')
+            self.flag('help').shorthand('h')
 
     def _init_user_set(self, store=None):
         self.user_values = Multidict()
@@ -260,7 +337,7 @@ class Parser(object):
 
     @classmethod
     def with_locals(cls):
-        """ Create :class:Parser using locals() dict. """
+        ''' Create :class:`Parser` using locals() dict. '''
         import inspect
         vals = inspect.currentframe().f_back.f_locals
 #        p = Parser(cls._get_locals_dict())
@@ -277,10 +354,10 @@ class Parser(object):
         else:
             return '--' + name
 
-    @get_arguments_from_proxy
+    @names_to_options
     def set_mutually_required(self, *names):
-        """ All arguments require each other; i.e., if any is specified, then
-        all must be specified. """
+        ''' All arguments require each other; i.e., if any is specified, then
+        all must be specified. '''
 
         s = set(names)
         for v in s:
@@ -290,38 +367,44 @@ class Parser(object):
 
                 self.set_requires(v, vi)
 
-    @get_arguments_from_proxy
+    @names_to_options
     def set_at_least_one_required(self, *names):
-        """ At least one of the arguments is required. """
+        ''' At least one of the arguments is required. '''
 
         s = set(names)
         for v in s:
-            self.set_required(v, s - set([v]))
+            self._set_required(v, s - set([v]))
 
     @localize
-    def set_unspecified_default(self, name):
+    def _set_unspecified_default(self, name):
         if self._unspecified_default is not None:
             raise ValueError('Trying to specify multiple unspecified defaults')
 
         self._unspecified_default = name
 
     @localize
-    @get_arguments_from_proxy
-    def set_required(self, name, replacements=None):
+    @names_to_options
+    def _set_required(self, name, replacements=None):
         if replacements is None:
             replacements = []
-        self.required[name] = replacements
+        self._required[name] = replacements
 
     def add_config(self, name, **kwargs):
-        return self.add_option(name, cast=Config, **kwargs)
+        return self._add_option(name.cast(Config), **kwargs)
 
-    def add_float(self, name, **kwargs):
-        return self.add_option(name, cast=float, **kwargs)
+    def int(self, name):
+        ''' Add integer argument. '''
+        return self._add_option(name).cast(int)
 
-    def add_int(self, name, **kwargs):
-        return self.add_option(name, cast=int, **kwargs)
+    def float(self, name):
+        ''' Add float argument. '''
+        return self._add_option(name.cast(float), **kwargs)
 
-    def add_range(self, name, **kwargs):
+    def str(self, name):
+        ''' Add :py:class:`str` argument. '''
+        return self._add_option(name)
+
+    def add_range(self, name):
         def caster(x):
             def raise_error():
                 raise FormatError('%s is not range format: N:N+i ' % x)
@@ -334,74 +417,44 @@ class Parser(object):
             except ValueError:
                 raise_error()
 
-        return self.add_option(name, cast=caster, **kwargs)
-
-    def add_directory(self, name, **kwargs):
-        """ Adds a directory option, as :class:`io.Directory` object.  Requires
-        directory to exist or raises exception. """
-
-        from plyny.plio.files import Directory
-        return self.add_option(name, cast=Directory, **kwargs)
-
-    def add_input_file(self, name, **kwargs):
-        """ Adds an input file option, as :class:`io.File` object.  Requires
-        file to exist or raises exception. """
-
-        from plyny.plio.files import open_path
-
-        def opener(x):
-            f = open_path(x, True)
-            f.set_locked(True)
-            return f
-
-        result = self.add_option(name, cast=opener, **kwargs)
-        self._set_option(name, MultiWordArgument)
-        return result
-
-    def add_output_file(self, name, disable_overwrite=True, **kwargs):
-        """ Adds an output file option, as :class:`io.FileWriter` object.
-        Prevents the overwriting of the file.  """
-
-        from plyny.plio.files import stdio, FileWriter
-
-        name = self._localize(name)
-
-        def opener(x):
-            if x == '-':
-                return stdio()
-            else:
-                return FileWriter(x, not disable_overwrite)
-
-        return self.add_option(name, cast=opener, **kwargs)
+        return self._add_option(name).cast(caster)
 
     def __getitem__(self, name):
-        return ProxySetter(name, self)
+        return Option(name, self)
 
     @localize
     def _set_option(self, name, option):
         self.options[name] = option
 
-    def add_file(self, name, **kwargs):
-        """ Adds a :class:`io.File` option. """
-        from plyny.plio.files import open_path
-        return self.add_option(name, cast=open_path, **kwargs)
+    def multiword(self, name):
+        ''' Accepts multiple terms as an argument. For example:
+              python test.py --multi path to something
 
-    def add_multiword(self, name, **kwargs):
-        result = self.add_option(name, **kwargs)
-        self._set_option(name, MultiWordArgument)
+        '''
+
+        result = self._add_option(name)
+        self._set_option(name, _MultiWordArgumentReader)
         return result
 
-    def add_flag(self, name, **kwargs):
-        result = self.add_option(name, **kwargs)
-        self._set_option(name, FlagArgument)
+    def bool(self, name):
+        ''' Alias of :func:`flag`. '''
+
+        return self.flag(name)
+
+    def flag(self, name):
+        ''' Boolean value. The presence of this flag indicates a true value,
+        while an absence indicates false. No arguments. '''
+
+        result = self._add_option(name)
+        self._set_option(name, _FlagArgumentReader)
         return result
 
-    def add_alias(self, source, alias):
+    def _add_shorthand(self, source, alias):
         if source not in self.options:
             raise ValueError('%s not an option' % source)
         self.alias[alias] = source
 
-    def add_option(self, name, alias=None, cast=None, default=None,
+    def _add_option(self, name,
             argument_label=None, required=False, multiple=False,
             unspecified_default=False):
 
@@ -410,30 +463,15 @@ class Parser(object):
         if name in self.options:
             raise ValueError('multiple types specified for %s' % name)
 
-        self.options[name] = SingleWord
-
-        if alias is not None:
-            self.add_alias(name, alias)
-
-        if cast is not None:
-            self.casts[name] = cast
-
-        if default is not None:
-            self.set_default(name, default)
+        self.options[name] = _SingleWordReader
 
         if argument_label is not None:
             self.option_labels[name] = argument_label
 
         if required:
-            self.set_required(name)
+            self._set_required(name)
 
-        if multiple:
-            self.set_multiple(name)
-
-        if unspecified_default:
-            self.set_unspecified_default(name)
-
-        return ProxySetter(name, self)
+        return Option(name, self)
 
     def _getoption(self, option):
         o = self.options.get(option, None)
@@ -501,8 +539,8 @@ class Parser(object):
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
 
-                # push value onto SingleWord
-                argument_value = SingleWord()
+                # push value onto _SingleWordReader
+                argument_value = _SingleWordReader()
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
@@ -521,7 +559,7 @@ class Parser(object):
                 raise MultipleSpecifiedArgumentError('%s specified multiple times' %
                         self._to_flag(key))
 
-    def _verify_requirements(self):
+    def _find_requirements(self):
         for key, values in self.user_values.iteritems():
             for r in self.requires.get(key, []):
                 if self._localize(r) not in self.user_values:
@@ -554,7 +592,7 @@ class Parser(object):
 
     def _validate_entries(self):
         self._find_duplicates()
-        self._verify_requirements()
+        self._find_requirements()
         self._find_conflicts()
 
     def _assign(self):
@@ -570,7 +608,7 @@ class Parser(object):
 
         for key, value in self.options.iteritems():
             if key not in self.specified:
-                res = self.required.get(key, None)
+                res = self._required.get(key, None)
                 if res is not None:
                     if len(res) == 0:
                         raise MissingRequiredArgumentError('No value passed for'
@@ -595,25 +633,31 @@ class Parser(object):
             else:
                 self._set_final(key, value.default())
 
-    @get_arguments_from_proxy
+    @names_to_options
     def set_one_required(self, *names):
         self.set_mutually_exclusive(*names)
         self.set_at_least_one_required(*names)
 
-    @get_arguments_from_proxy
+    @names_to_options
     def set_mutually_dependent(self, *names):
         list(starmap(self.set_requires, permutations(names, 2)))
 
-    @get_arguments_from_proxy
+    @names_to_options
     def set_mutually_exclusive(self, *names):
         list(starmap(self.set_conflicts, permutations(names, 2)))
 
+    def _get_args(self, args):
+        if args is None:
+            args = sys.argv[1:]
+
+        if not isinstance(args, list):
+            raise TypeError('%s not list' % args)
+
+        return args
+
     def _process_command_line(self, args=None):
         try:
-            if args is None:
-                args = sys.argv[1:]
-            if not isinstance(args, list):
-                raise TypeError('%s not list' % args)
+            args = self._get_args(args)
             args = self._parse(args)
             self._read(args)
             self._help_if_necessary()
@@ -650,7 +694,7 @@ class Parser(object):
 
     def _set_final(self, key, value):
         if key not in self.store:
-            cast = self.casts.get(key, None)
+            cast = self._casts.get(key, None)
             if cast and value is not None:
                 if cast == Config:
                     Config(value, self.store, overwrite=False)
@@ -663,30 +707,30 @@ class Parser(object):
             self.store[key] = value
 
     @localize
-    @get_arguments_from_proxy
+    @names_to_options
     def set_multiple(self, name):
         self.multiple.add(name)
 
     @localize
-    @get_arguments_from_proxy
+    @names_to_options
     def set_default(self, name, value):
         self.defaults[name] = value
 
     @localize_all
     @verify_args_exist
-    @get_arguments_from_proxy
+    @names_to_options
     def set_requires(self, a, b):
         self.requires[a] = b
 
     @localize_all
     @verify_args_exist
-    @get_arguments_from_proxy
+    @names_to_options
     def set_requires_n_of(self, a, n, *others):
         self.require_n[a] = (n, others)
 
     @localize_all
     @verify_args_exist
-    @get_arguments_from_proxy
+    @names_to_options
     def set_conflicts(self, a, b):
         self.conflicts[a] = b
 
@@ -706,7 +750,7 @@ class Parser(object):
                 pkey += ',' + self._to_flag(k)
 
         value = self.options[name]
-        if value != FlagArgument:
+        if value != _FlagArgumentReader:
             pkey = '%s <%s>' % (pkey, self._option_label(name))
 
         return pkey
@@ -723,27 +767,46 @@ class Parser(object):
             print fmt % self._label(key)
 
 
-if __name__ == '__main__':
-    d = {}
+class IOParser(Parser):
+    def directory(self, name):
+        ''' Adds a directory option, as :class:`io.Directory` object.  Requires
+        directory to exist or raises exception. '''
 
-    sys.argv[1:] = ['-f']
+        from plyny.plio.files import Directory
+        return self._add_option(name).cast(Directory)
 
-    with Parser.with_locals() as p:
-        p.add_option('a', 'alias', 'value')
-        p.add_multiword('b')
-        p.add_flag('c')
-        p.add_flag('cubs-cub')
-        p.add_option('d')
-        p.set_requires('a', 'b')
-        p.set_requires('a', 'c')
-        p.set_conflicts('a', 'd')
-        p.add_float('f')
-        p.add_int('i')
-        p.add_alias('f', 'float')
-        p.set_required('f', ['a'])
-#       p.print_help()
-        p.set_mutually_exclusive('a', 'd')
-        p.set_at_least_one_required('a', 'd')
+    def file(self, name):
+        ''' Adds a :class:`io.File` option. '''
+        from plyny.plio.files import open_path
+        return self._add_option(name).cast(open_path)
 
-#    print d
-#    print a
+    def input_file(self, name):
+        ''' Adds an input file option, as :class:`io.File` object.  Requires
+        file to exist or raises exception. '''
+
+        from plyny.plio.files import open_path
+
+        def opener(x):
+            f = open_path(x, True)
+            f.set_locked(True)
+            return f
+
+        result = self._add_option(name).cast(opener)
+        self._set_option(name, _MultiWordArgumentReader)
+        return result
+
+    def output_file(self, name, disable_overwrite=True):
+        ''' Adds an output file option, as :class:`io.FileWriter` object.
+        Prevents the overwriting of the file.  '''
+
+        from plyny.plio.files import stdio, FileWriter
+
+        name = self._localize(name)
+
+        def opener(x):
+            if x == '-':
+                return stdio()
+            else:
+                return FileWriter(x, not disable_overwrite)
+
+        return self._add_option(name).cast(opener)
