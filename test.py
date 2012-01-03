@@ -36,6 +36,14 @@ class TestCase(unittest.TestCase):
         vals = p._process_command_line(['--aa', 'a', 'c', 'd', '--ab', 'b'])
         self.assertEquals(vals['aa'], 'a c d')
 
+        p = Parser().single_flag('+').double_flag('M')
+        p.multiword('aa')
+        p.str('ab').shorthand('a')
+        vals = p._process_command_line(['Maa', 'a', 'c', 'd', 'Mab', 'b'])
+        self.assertEquals(vals['aa'], 'a c d')
+        vals = p._process_command_line(['Maa', 'a', 'c', 'd', '+a', 'b'])
+        self.assertEquals(vals['aa'], 'a c d')
+
     def x_test_with_files(self):
         d = TemporaryDirectory()
 

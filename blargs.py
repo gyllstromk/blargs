@@ -233,8 +233,9 @@ class Option(object):
 
 
 class _ArgumentReader(object):
-    def __init__(self):
+    def __init__(self, parent):
         self.value = None
+        self.parent = parent
         self._init()
 
     def consume_or_skip(self, arg):
@@ -253,8 +254,9 @@ class _MultiWordArgumentReader(_ArgumentReader):
         self.value = []
 
     def consume_or_skip(self, arg):
-        if arg.startswith('-'):
+        if self.parent._is_argument_label(arg):
             return False
+
         self.value.append(arg)
         return True
 
@@ -300,7 +302,7 @@ class _SingleWordReader(_ArgumentReader):
 class Parser(object):
     ''' Command line parser. '''
 
-    def __init__(self, store=None, to_underscore=False, default_help=True):
+    def __init__(self, store=None, default_help=True):
         self.options = {}
         self.option_labels = {}
         self._required = {}
@@ -313,13 +315,34 @@ class Parser(object):
         self.require_n = {}
         self.conflicts = Multidict()
         self.alias = {}
-        self._to_underscore = to_underscore
+
+        self._to_underscore = False
+        self._single_flag = '-'
+        self._double_flag = '--'
 
         # set by user
         self._init_user_set(store)
 
         if default_help:
             self.flag('help').shorthand('h')
+
+    def underscore(self):
+        self._to_underscore = True
+        return self
+
+    def single_flag(self, flag):
+        ''' Set the single flag prefix. This appears before short arguments
+        (e.g., -a). '''
+
+        self._single_flag = flag
+        return self
+
+    def double_flag(self, flag):
+        ''' Set the double flag prefix. This appears before long arguments
+        (e.g., --arg). '''
+
+        self._double_flag = flag
+        return self
 
     def _init_user_set(self, store=None):
         self.user_values = Multidict()
@@ -336,17 +359,15 @@ class Parser(object):
 
         import inspect
         vals = inspect.currentframe().f_back.f_locals
-        p = Parser(vals)
-        p._to_underscore = True
-        return p
+        return Parser(vals).underscore()
 
     def _to_flag(self, name):
         name = self._unlocalize(name)
 
         if len(name) == 1:
-            return '-' + name
+            return self._single_flag + name
         else:
-            return '--' + name
+            return self._double_flag + name
 
     @options_to_names
     def require_all_if_any(self, *names):
@@ -499,6 +520,10 @@ class Parser(object):
 
         return new_args
 
+    def _is_argument_label(self, arg):
+        return (arg.startswith(self._single_flag) or
+                arg.startswith(self._double_flag))
+
     def _read(self, args):
         argument_value = None
 
@@ -509,29 +534,26 @@ class Parser(object):
                 argument_value = None
 
             argument_name = None
-            has_label = arg.startswith('-')
 
-            if has_label:
-                short_cut = len(arg) == 2
-
-                if short_cut:
-                    arg = arg[1:]
+            if self._is_argument_label(arg):
+                if arg.startswith(self._double_flag):
+                    prefix = self._double_flag
                 else:
-                    if not arg.startswith('--'):
-                        raise UnspecifiedArgumentError(arg)
-                    arg = arg[2:]
+                    prefix = self._single_flag
+
+                arg = arg[len(prefix):]
 
                 argument_name = self._localize(arg)
 
                 argument_name, argument_value = self._getoption(argument_name)
                 if argument_value is None:
                     raise UnspecifiedArgumentError(argument_name)
-                argument_value = argument_value()
+                argument_value = argument_value(self)
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
 
                 # push value onto _SingleWordReader
-                argument_value = _SingleWordReader()
+                argument_value = _SingleWordReader(self)
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
