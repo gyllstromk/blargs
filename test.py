@@ -15,13 +15,26 @@ class TestCase(unittest.TestCase):
 
     def test_localize(self):
         p = Parser.with_locals()
-        p.str('multi-word')
-        p.str('another-multi-word')
-        p.set_requires('multi-word', 'another-multi-word')
+        p.str('multi-word').requires(p.str('another-multi-word'))
         vals = p._process_command_line(['--multi-word', 'a', '--another-multi-word', 'b'])
         self.assertTrue('multi_word' in vals)
         self.assertFalse('multi-word' in vals)
         self.assertTrue('multi_word' in locals())
+
+    def test_multiword(self):
+        p = Parser()
+        p.multiword('aa')
+        p.str('ab')
+
+        vals = p._process_command_line(['--aa', 'a', '--ab', 'b'])
+        self.assertEquals(vals['aa'], 'a')
+        self.assertEquals(vals['ab'], 'b')
+
+        vals = p._process_command_line(['--aa', 'a c d', '--ab', 'b'])
+        self.assertEquals(vals['aa'], 'a c d')
+
+        vals = p._process_command_line(['--aa', 'a', 'c', 'd', '--ab', 'b'])
+        self.assertEquals(vals['aa'], 'a c d')
 
     def x_test_with_files(self):
         d = TemporaryDirectory()
@@ -99,15 +112,12 @@ class TestCase(unittest.TestCase):
         self.assertEqual(vals['x'], 'ok')
 
         p = Parser({})
-        p.str('x').unspecified_default()
-        p.str('y')
-        p.set_conflicts('x', 'y')
+        p.str('x').unspecified_default().conflicts(p.str('y'))
         self.assertRaises(ConflictError, p._process_command_line,
             ['-y', 'a', 'unspecified_default'])
+
         p = Parser({})
-        p.str('x').unspecified_default()
-        p.str('y')
-        p.set_conflicts('x', 'y')
+        p.str('x').unspecified_default().conflicts(p.str('y'))
         self.assertRaises(ConflictError, p._process_command_line,
             ['unspecified_default', '-y', 'a'])
     
@@ -190,12 +200,11 @@ class TestCase(unittest.TestCase):
 
     def test_requires(self):
         p = Parser()
-        p.str('x')
-        self.assertRaises(ValueError, p.set_requires, 'x', 'y')
-        p.str('y')
+        r = p.str('x')
+        self.assertRaises(ValueError, r.requires, 'y')
         try:
-            p.set_requires('x', 'y')
-        except:
+            r.requires(p.str('y'))
+        except ValueError:
             self.fail()
 
         p = Parser()
@@ -207,9 +216,7 @@ class TestCase(unittest.TestCase):
     def test_depends(self):
         def create():
             p = Parser()
-            p.str('x')
-            p.str('y')
-            p.set_requires('x', 'y')
+            p.str('x').requires(p.str('y'))
 
             return p
 
@@ -227,13 +234,11 @@ class TestCase(unittest.TestCase):
     def test_depends_group(self):
         def create():
             p = Parser()
-            p.str('x')
-            p.str('y')
-            p.str('z')
-            p.str('w')
-
-            for v in 'yzw':
-                p.set_requires('x', v)
+            p.str('x').requires(
+                p.str('y'),
+                p.str('z'),
+                p.str('w')
+            )
 
             return p
 
@@ -252,9 +257,7 @@ class TestCase(unittest.TestCase):
     def test_conflicts(self):
         def create():
             p = Parser()
-            p.flag('x')
-            p.flag('y')
-            p.set_conflicts('x', 'y')
+            p.flag('x').conflicts(p.flag('y'))
             return p
 
         self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
@@ -268,12 +271,6 @@ class TestCase(unittest.TestCase):
         except:
             self.assertTrue(False)
 
-#    def test_type_checking(self):
-#        self.assertRaises(TypeError, p.set_mutually_exclusive, 'hello')
-#        self.assertRaises(TypeError, p.set_mutually_dependent, 'hello')
-#        self.assertRaises(TypeError, p.set_at_least_one_required, 'hello')
-#        self.assertRaises(TypeError, p.set_one_required, 'hello')
-    
     def test_mutually_exclusive(self):
         def create():
             p = Parser()
@@ -296,11 +293,12 @@ class TestCase(unittest.TestCase):
     def test_mutually_dependent(self):
         def create():
             p = Parser()
-            p.flag('x')
-            p.flag('y')
-            p.flag('z')
+            p.mutually_require(
+                p.flag('x'),
+                p.flag('y'),
+                p.flag('z')
+            )
 
-            p.mutually_require(*'xyz')
             return p
 
         self.assertRaises(DependencyError, create()._process_command_line, ['-x'])

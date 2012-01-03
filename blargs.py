@@ -14,7 +14,6 @@ import sys
 #   * error is --one-flag not specified even if multiple are allowed
 #   * deal with difference between localized/non
 #   * enumeration type
-#   * duplicate shorthands?
 
 
 def Config(filename, dictionary=None, overwrite=True):
@@ -332,21 +331,14 @@ class Parser(object):
         self._rnamemaps = {}
 
     @classmethod
-    def _get_locals_dict(cls):
-        # XXX need to get start frame, not just previous
-        pass
-
-    @classmethod
     def with_locals(cls):
         ''' Create :class:`Parser` using locals() dict. '''
 
         import inspect
         vals = inspect.currentframe().f_back.f_locals
-#        p = Parser(cls._get_locals_dict())
         p = Parser(vals)
         p._to_underscore = True
         return p
-
 
     def _to_flag(self, name):
         name = self._unlocalize(name)
