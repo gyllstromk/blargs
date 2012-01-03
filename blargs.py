@@ -177,7 +177,7 @@ class Option(object):
         :param others: required options
         :type others: sequence of either :class:`Option` or basestring of option names
         '''
-        [self.parser.set_requires(self.argname, x) for x in others]
+        [self.parser._set_requires(self.argname, x) for x in others]
         return self
 
     def conflicts(self, *others):
@@ -186,7 +186,7 @@ class Option(object):
         :param others: conflicting options
         :type others: sequence of either :class:`Option` or basestring of option names
         '''
-        [self.parser.set_conflicts(self.argname, x) for x in others]
+        [self.parser._set_conflicts(self.argname, x) for x in others]
         return self
 
     def shorthand(self, alias):
@@ -205,7 +205,7 @@ class Option(object):
 
     def default(self, value):
         ''' Provide a default value for this argument. '''
-        self.parser.set_default(self.argname, value)
+        self.parser._set_default(self.argname, value)
         return self
 
     def cast(self, cast):
@@ -228,7 +228,7 @@ class Option(object):
 
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
-        self.parser.set_multiple(argname)
+        self.parser._set_multiple(self.argname)
 
 # ---------- Argument readers ---------- #
 
@@ -339,6 +339,7 @@ class Parser(object):
     @classmethod
     def with_locals(cls):
         ''' Create :class:`Parser` using locals() dict. '''
+
         import inspect
         vals = inspect.currentframe().f_back.f_locals
 #        p = Parser(cls._get_locals_dict())
@@ -356,7 +357,7 @@ class Parser(object):
             return '--' + name
 
     @options_to_names
-    def set_mutually_required(self, *names):
+    def require_all_if_any(self, *names):
         ''' All arguments require each other; i.e., if any is specified, then
         all must be specified. '''
 
@@ -366,10 +367,10 @@ class Parser(object):
                 if v == vi:
                     continue
 
-                self.set_requires(v, vi)
+                self._set_requires(v, vi)
 
     @options_to_names
-    def set_at_least_one_required(self, *names):
+    def require_at_least_one(self, *names):
         ''' At least one of the arguments is required. '''
 
         s = set(names)
@@ -405,7 +406,7 @@ class Parser(object):
         ''' Add :py:class:`str` argument. '''
         return self._add_option(name)
 
-    def add_range(self, name):
+    def range(self, name):
         def caster(x):
             def raise_error():
                 raise FormatError('%s is not range format: N:N+i ' % x)
@@ -457,9 +458,7 @@ class Parser(object):
             raise ValueError('{0} already shorthand for {1}'.format(alias, self.alias[alias]))
         self.alias[alias] = source
 
-    def _add_option(self, name,
-            argument_label=None, required=False, multiple=False,
-            unspecified_default=False):
+    def _add_option(self, name, argument_label=None):
 
         name = self._localize(name)
 
@@ -470,9 +469,6 @@ class Parser(object):
 
         if argument_label is not None:
             self.option_labels[name] = argument_label
-
-        if required:
-            self._set_required(name)
 
         return Option(name, self)
 
@@ -638,23 +634,23 @@ class Parser(object):
 
     @options_to_names
     def set_one_required(self, *names):
-        self.set_mutually_exclusive(*names)
-        self.set_at_least_one_required(*names)
+        self.mutually_exclude(*names)
+        self.require_at_least_one(*names)
 
     def require_one(self, *names):
         self.set_one_required(*names)
 
     @options_to_names
     def all_require(self, required, *names):
-        [self.set_requires(name, required) for name in names]
+        [self._set_requires(name, required) for name in names]
 
     @options_to_names
-    def set_mutually_dependent(self, *names):
-        list(starmap(self.set_requires, permutations(names, 2)))
+    def mutually_require(self, *names):
+        list(starmap(self._set_requires, permutations(names, 2)))
 
     @options_to_names
-    def set_mutually_exclusive(self, *names):
-        list(starmap(self.set_conflicts, permutations(names, 2)))
+    def mutually_exclude(self, *names):
+        list(starmap(self._set_conflicts, permutations(names, 2)))
 
     def _get_args(self, args):
         if args is None:
@@ -718,18 +714,18 @@ class Parser(object):
 
     @localize
     @options_to_names
-    def set_multiple(self, name):
+    def _set_multiple(self, name):
         self.multiple.add(name)
 
     @localize
     @options_to_names
-    def set_default(self, name, value):
+    def _set_default(self, name, value):
         self.defaults[name] = value
 
     @localize_all
     @verify_args_exist
     @options_to_names
-    def set_requires(self, a, b):
+    def _set_requires(self, a, b):
         self.requires[a] = b
 
     @localize_all
@@ -741,7 +737,7 @@ class Parser(object):
     @localize_all
     @verify_args_exist
     @options_to_names
-    def set_conflicts(self, a, b):
+    def _set_conflicts(self, a, b):
         self.conflicts[a] = b
 
     def __enter__(self):

@@ -58,7 +58,7 @@ class TestCase(unittest.TestCase):
         def create():
             l = {}
             p = Parser(l)
-            p.add_range('a')
+            p.range('a')
             return p, l
 
         def xrange_equals(x1, x2):
@@ -76,17 +76,14 @@ class TestCase(unittest.TestCase):
         self.assertTrue(xrange_equals(l['a'], xrange(1, 1)))
 
     def test_multiple(self):
-        def create():
-            p = Parser()
-            p.str('x')
-
-            return p
+        p = Parser()
+        p.str('x')
 
         self.assertRaises(MultipleSpecifiedArgumentError,
-                create()._process_command_line, ['-x', '1', '-x', '2'])
+                p._process_command_line, ['-x', '1', '-x', '2'])
 
-        p = create()
-        p.set_multiple('x')
+        p = Parser()
+        p.str('x').multiple()
 
         p._process_command_line(['-x', '1', '-x', '2'])
 
@@ -284,7 +281,7 @@ class TestCase(unittest.TestCase):
             p.flag('y')
             p.flag('z')
 
-            p.set_mutually_exclusive(*'xyz')
+            p.mutually_exclude(*'xyz')
             return p
 
         self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
@@ -303,7 +300,7 @@ class TestCase(unittest.TestCase):
             p.flag('y')
             p.flag('z')
 
-            p.set_mutually_dependent(*'xyz')
+            p.mutually_require(*'xyz')
             return p
 
         self.assertRaises(DependencyError, create()._process_command_line, ['-x'])
@@ -343,7 +340,7 @@ class TestCase(unittest.TestCase):
             p.str('y')
             p.str('z')
 
-            p.set_at_least_one_required('x', 'y', 'z')
+            p.require_at_least_one('x', 'y', 'z')
             return p
 
         create()._process_command_line(['-x', '1'])
