@@ -49,6 +49,11 @@ class TestCase(unittest.TestCase):
         f.writer(overwrite=True).write('sup')
         vals = p._process_command_line(['-i', str(f.path())])
 
+    def test_shorthand(self):
+        p = Parser()
+        p.int('aa').shorthand('a')
+        self.assertRaises(ValueError, lambda x: p.int('ab').shorthand(x), 'a')
+
     def test_range(self):
         def create():
             l = {}

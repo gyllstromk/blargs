@@ -14,6 +14,7 @@ import sys
 #   * error is --one-flag not specified even if multiple are allowed
 #   * deal with difference between localized/non
 #   * enumeration type
+#   * duplicate shorthands?
 
 
 def Config(filename, dictionary=None, overwrite=True):
@@ -452,6 +453,8 @@ class Parser(object):
     def _add_shorthand(self, source, alias):
         if source not in self.options:
             raise ValueError('%s not an option' % source)
+        if alias in self.alias:
+            raise ValueError('{0} already shorthand for {1}'.format(alias, self.alias[alias]))
         self.alias[alias] = source
 
     def _add_option(self, name,
