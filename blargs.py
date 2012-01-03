@@ -35,8 +35,8 @@ def Config(filename, dictionary=None, overwrite=True):
 
 # ---------- decorators ---------- #
 
-def names_to_options(f):
-    ''' Convert any option names to :class:`Option` objects. '''
+def options_to_names(f):
+    ''' Convert any :class:`Option`s to names. '''
 
     @wraps(f)
     def inner(*args, **kwargs):
@@ -354,7 +354,7 @@ class Parser(object):
         else:
             return '--' + name
 
-    @names_to_options
+    @options_to_names
     def set_mutually_required(self, *names):
         ''' All arguments require each other; i.e., if any is specified, then
         all must be specified. '''
@@ -367,7 +367,7 @@ class Parser(object):
 
                 self.set_requires(v, vi)
 
-    @names_to_options
+    @options_to_names
     def set_at_least_one_required(self, *names):
         ''' At least one of the arguments is required. '''
 
@@ -383,14 +383,14 @@ class Parser(object):
         self._unspecified_default = name
 
     @localize
-    @names_to_options
+    @options_to_names
     def _set_required(self, name, replacements=None):
         if replacements is None:
             replacements = []
         self._required[name] = replacements
 
-    def add_config(self, name, **kwargs):
-        return self._add_option(name.cast(Config), **kwargs)
+    def config(self, name):
+        return self._add_option(name).cast(Config)
 
     def int(self, name):
         ''' Add integer argument. '''
@@ -398,7 +398,7 @@ class Parser(object):
 
     def float(self, name):
         ''' Add float argument. '''
-        return self._add_option(name.cast(float), **kwargs)
+        return self._add_option(name).cast(float)
 
     def str(self, name):
         ''' Add :py:class:`str` argument. '''
@@ -633,16 +633,23 @@ class Parser(object):
             else:
                 self._set_final(key, value.default())
 
-    @names_to_options
+    @options_to_names
     def set_one_required(self, *names):
         self.set_mutually_exclusive(*names)
         self.set_at_least_one_required(*names)
 
-    @names_to_options
+    def require_one(self, *names):
+        self.set_one_required(*names)
+
+    @options_to_names
+    def all_require(self, required, *names):
+        [self.set_requires(name, required) for name in names]
+
+    @options_to_names
     def set_mutually_dependent(self, *names):
         list(starmap(self.set_requires, permutations(names, 2)))
 
-    @names_to_options
+    @options_to_names
     def set_mutually_exclusive(self, *names):
         list(starmap(self.set_conflicts, permutations(names, 2)))
 
@@ -707,30 +714,30 @@ class Parser(object):
             self.store[key] = value
 
     @localize
-    @names_to_options
+    @options_to_names
     def set_multiple(self, name):
         self.multiple.add(name)
 
     @localize
-    @names_to_options
+    @options_to_names
     def set_default(self, name, value):
         self.defaults[name] = value
 
     @localize_all
     @verify_args_exist
-    @names_to_options
+    @options_to_names
     def set_requires(self, a, b):
         self.requires[a] = b
 
     @localize_all
     @verify_args_exist
-    @names_to_options
+    @options_to_names
     def set_requires_n_of(self, a, n, *others):
         self.require_n[a] = (n, others)
 
     @localize_all
     @verify_args_exist
-    @names_to_options
+    @options_to_names
     def set_conflicts(self, a, b):
         self.conflicts[a] = b
 
@@ -769,7 +776,7 @@ class Parser(object):
 
 class IOParser(Parser):
     def directory(self, name):
-        ''' Adds a directory option, as :class:`io.Directory` object.  Requires
+        ''' Adds a directory option, as :class:`io.Directory` object. Requires
         directory to exist or raises exception. '''
 
         from plyny.plio.files import Directory
@@ -781,7 +788,7 @@ class IOParser(Parser):
         return self._add_option(name).cast(open_path)
 
     def input_file(self, name):
-        ''' Adds an input file option, as :class:`io.File` object.  Requires
+        ''' Adds an input file option, as :class:`io.File` object. Requires
         file to exist or raises exception. '''
 
         from plyny.plio.files import open_path
