@@ -96,6 +96,16 @@ class TestCase(unittest.TestCase):
         p._process_command_line(['-a', '1:-1'])
         self.assertTrue(xrange_equals(l['a'], xrange(1, 1)))
 
+        v = p._process_command_line(['-a', '0', '9'])
+        self.assertTrue(xrange_equals(v['a'], xrange(0, 9)))
+
+        v = p._process_command_line(['-a', '0', '9', '3'])
+        self.assertTrue(xrange_equals(v['a'], xrange(0, 9, 3)))
+
+        p.single_flag('+')
+        v = p._process_command_line(['+a', '0', '-1', '3'])
+        self.assertTrue(xrange_equals(v['a'], xrange(0, -1, 3)))
+
     def test_multiple(self):
         p = Parser()
         p.str('x')

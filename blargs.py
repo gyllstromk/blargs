@@ -422,17 +422,25 @@ class Parser(object):
     def range(self, name):
         def caster(x):
             def raise_error():
-                raise FormatError('%s is not range format: N:N+i ' % x)
+                raise FormatError('%s is not range format: N:N+i, N-N+i, or N N+i' % x)
 
-            toks = x.split(':')
-            if len(toks) != 2:
+            for char in (' :-'):
+                if char in x:
+                    splitter = char
+                    break
+            else:
+                raise_error()
+
+            toks = x.split(splitter)
+            if not (2 <= len(toks) <= 3):
                 raise_error()
             try:
                 return xrange(*(int(y) for y in toks))
             except ValueError:
                 raise_error()
 
-        return self._add_option(name).cast(caster)
+        self._add_option(name).cast(caster)
+        self._set_option(name, _MultiWordArgumentReader)
 
     def __getitem__(self, name):
         return Option(name, self)
@@ -721,6 +729,8 @@ class Parser(object):
                 else:
                     try:
                         value = cast(value)
+                    except FormatError:
+                        raise
                     except ValueError:
                         raise FormatError('Cannot cast %s to %s', value, cast)
 
