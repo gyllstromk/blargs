@@ -79,7 +79,8 @@ class TestCase(unittest.TestCase):
         def create():
             l = {}
             p = Parser(l)
-            p.range('a')
+            x = p.range('a')
+            self.assertTrue(x is not None)
             return p, l
 
         def xrange_equals(x1, x2):

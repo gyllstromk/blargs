@@ -60,7 +60,7 @@ def verify_args_exist(f):
 
         self = args[0]
         for arg in args[1:]:
-            if isinstance(arg, basestring) and arg not in self.options:
+            if isinstance(arg, basestring) and arg not in self._readers:
                 raise_error(arg)
 
         return f(*args, **kwargs)
@@ -303,7 +303,7 @@ class Parser(object):
     ''' Command line parser. '''
 
     def __init__(self, store=None, default_help=True):
-        self.options = {}
+        self._readers = {}
         self.option_labels = {}
         self._required = {}
         self.multiple = set()
@@ -439,15 +439,16 @@ class Parser(object):
             except ValueError:
                 raise_error()
 
-        self._add_option(name).cast(caster)
-        self._set_option(name, _MultiWordArgumentReader)
+        result = self._add_option(name).cast(caster)
+        self._set_reader(name, _MultiWordArgumentReader)
+        return result
 
     def __getitem__(self, name):
         return Option(name, self)
 
     @localize
-    def _set_option(self, name, option):
-        self.options[name] = option
+    def _set_reader(self, name, option):
+        self._readers[name] = option
 
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
@@ -456,7 +457,7 @@ class Parser(object):
         '''
 
         result = self._add_option(name)
-        self._set_option(name, _MultiWordArgumentReader)
+        self._set_reader(name, _MultiWordArgumentReader)
         return result
 
     def bool(self, name):
@@ -469,11 +470,11 @@ class Parser(object):
         while an absence indicates false. No arguments. '''
 
         result = self._add_option(name)
-        self._set_option(name, _FlagArgumentReader)
+        self._set_reader(name, _FlagArgumentReader)
         return result
 
     def _add_shorthand(self, source, alias):
-        if source not in self.options:
+        if source not in self._readers:
             raise ValueError('%s not an option' % source)
         if alias in self.alias:
             raise ValueError('{0} already shorthand for {1}'.format(alias, self.alias[alias]))
@@ -483,10 +484,10 @@ class Parser(object):
 
         name = self._localize(name)
 
-        if name in self.options:
+        if name in self._readers:
             raise ValueError('multiple types specified for %s' % name)
 
-        self.options[name] = _SingleWordReader
+        self._readers[name] = _SingleWordReader
 
         if argument_label is not None:
             self.option_labels[name] = argument_label
@@ -494,7 +495,7 @@ class Parser(object):
         return Option(name, self)
 
     def _getoption(self, option):
-        o = self.options.get(option, None)
+        o = self._readers.get(option, None)
         if o is not None:
             return option, o
 
@@ -502,7 +503,7 @@ class Parser(object):
         if source is None:
             return option, None
 
-        return source, self.options.get(source, None)
+        return source, self._readers.get(source, None)
 
     def _localize(self, key):
         if self._to_underscore:
@@ -627,7 +628,7 @@ class Parser(object):
                 raise MissingRequiredArgumentError('No value passed for %s' %
                         self._unlocalize(key))
 
-        for key, value in self.options.iteritems():
+        for key, value in self._readers.iteritems():
             if key not in self.specified:
                 res = self._required.get(key, None)
                 if res is not None:
@@ -648,7 +649,7 @@ class Parser(object):
         for key, value in self.specified.iteritems():
             self._set_final(key, value)
 
-        for key, value in self.options.iteritems():
+        for key, value in self._readers.iteritems():
             if key in self.defaults:
                 self._set_final(key, self.defaults[key])
             else:
@@ -711,7 +712,7 @@ class Parser(object):
         else:
             print e
         print 'usage: %s' % sys.argv[0],
-        for key in self.options:
+        for key in self._readers:
             print '[%s]' % self._label(key),
 
         print
@@ -779,7 +780,7 @@ class Parser(object):
             if name in v:
                 pkey += ',' + self._to_flag(k)
 
-        value = self.options[name]
+        value = self._readers[name]
         if value != _FlagArgumentReader:
             pkey = '%s <%s>' % (pkey, self._option_label(name))
 
@@ -788,12 +789,12 @@ class Parser(object):
     def print_help(self):
         print 'Arguments:'
         column_width = -1
-        for key in self.options:
+        for key in self._readers:
             column_width = max(column_width, len(self._label(key)))
 
         fmt = '   %-' + str(column_width) + 's'
 
-        for key in self.options:
+        for key in self._readers:
             print fmt % self._label(key)
 
 
@@ -822,7 +823,7 @@ class IOParser(Parser):
             return f
 
         result = self._add_option(name).cast(opener)
-        self._set_option(name, _MultiWordArgumentReader)
+        self._set_reader(name, _MultiWordArgumentReader)
         return result
 
     def output_file(self, name, disable_overwrite=True):
