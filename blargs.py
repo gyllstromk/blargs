@@ -231,6 +231,11 @@ class Option(object):
 
 # ---------- Argument readers ---------- #
 
+# Argument readers help parse the command line. The flow is as follows:
+#
+# 1) We create a reader for each argument based on the type specified by the programmer (e.g., a bool will get a _FlagArgumentReader
+# 2) The reader is used when we hit the argument label
+
 
 class _ArgumentReader(object):
     def __init__(self, parent):
