@@ -319,12 +319,17 @@ class Parser(object):
         self._to_underscore = False
         self._single_flag = '-'
         self._double_flag = '--'
+        self._help_prefix = None
 
         # set by user
         self._init_user_set(store)
 
         if default_help:
             self.flag('help').shorthand('h')
+
+    def help_prefix(self, message):
+        self._help_prefix = message
+        return self
 
     def underscore(self):
         self._to_underscore = True
@@ -420,6 +425,8 @@ class Parser(object):
         return self._add_option(name)
 
     def range(self, name):
+        ''' Range type, specified as python range. XXX '''
+
         def caster(x):
             def raise_error():
                 raise FormatError('%s is not range format: N:N+i, N-N+i, or N N+i' % x)
@@ -428,11 +435,9 @@ class Parser(object):
                 if char in x:
                     splitter = char
                     break
-            else:
-                raise_error()
 
             toks = x.split(splitter)
-            if not (2 <= len(toks) <= 3):
+            if not (1 <= len(toks) <= 3):
                 raise_error()
             try:
                 return xrange(*(int(y) for y in toks))
@@ -787,6 +792,9 @@ class Parser(object):
         return pkey
 
     def print_help(self):
+        if self._help_prefix:
+            print self._help_prefix
+
         print 'Arguments:'
         column_width = -1
         for key in self._readers:
