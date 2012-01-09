@@ -218,6 +218,11 @@ class Option(object):
         self.parser._set_required(self.argname)
         return self
 
+    def unless(self, *replacements):
+        ''' Argument is required unless replacements specified. '''
+
+        self.parser._set_required(self.argname, replacements)
+
     def unspecified_default(self):
         ''' Indicate that values passed without argument labels will be
         attributed to this argument. '''
@@ -405,9 +410,7 @@ class Parser(object):
     @localize
     @options_to_names
     def _set_required(self, name, replacements=None):
-        if replacements is None:
-            replacements = []
-        self._required[name] = replacements
+        self._required.setdefault(name, []).extend(replacements or [])
 
     def config(self, name):
         return self._add_option(name).cast(Config)

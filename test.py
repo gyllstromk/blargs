@@ -217,6 +217,17 @@ class TestCase(unittest.TestCase):
         self.assertRaises(MissingRequiredArgumentError,
                 p._process_command_line, [])
 
+        p = Parser()
+        p.str('x').unless('y', 'z')
+        p.str('y')
+        p.str('z')
+        self.assertRaises(ManyAllowedNoneSpecifiedArgumentError,
+                p._process_command_line, [])
+        p._process_command_line(['--y', 'a'])
+        p._process_command_line(['--x', 'a'])
+        p._process_command_line(['--x', 'a', '--y', 'b'])
+        p._process_command_line(['--z', 'a'])
+
     def test_requires(self):
         p = Parser()
         r = p.str('x')
