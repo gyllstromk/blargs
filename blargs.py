@@ -236,6 +236,11 @@ class Option(object):
 
 # ---------- Argument readers ---------- #
 
+# Argument readers help parse the command line. The flow is as follows:
+#
+# 1) We create a reader for each argument based on the type specified by the programmer (e.g., a bool will get a _FlagArgumentReader
+# 2) The reader is used when we hit the argument label
+
 
 class _ArgumentReader(object):
     def __init__(self, parent):
@@ -309,21 +314,35 @@ class Parser(object):
 
     def __init__(self, store=None, default_help=True):
         self._readers = {}
-        self.option_labels = {}
-        self._required = {}
-        self.multiple = set()
+        self._option_labels = {}
+        self._multiple = set()
         self._casts = {}
-        self.defaults = {}
-        self.extras = []
+        self._defaults = {}
+        self._extras = []
         self._unspecified_default = None
-        self.requires = Multidict()
         self.require_n = {}
-        self.conflicts = Multidict()
-        self.alias = {}
 
+        # dict of A (required) -> args that could replace A if A is not
+        # specified
+        self._required = {}
+
+        # dict of A -> args that A depends on
+        self._requires = {}
+
+        # dict of A -> args that A conflicts with
+        self._conflicts = {}
+        self._alias = {}
+
+        # convert arg labels to understore in value dict
         self._to_underscore = False
+
+        # prefix to shorthand args
         self._single_flag = '-'
+
+        # prefix to fullname args
         self._double_flag = '--'
+
+        # help message
         self._help_prefix = None
 
         # set by user
@@ -484,9 +503,9 @@ class Parser(object):
     def _add_shorthand(self, source, alias):
         if source not in self._readers:
             raise ValueError('%s not an option' % source)
-        if alias in self.alias:
-            raise ValueError('{0} already shorthand for {1}'.format(alias, self.alias[alias]))
-        self.alias[alias] = source
+        if alias in self._alias:
+            raise ValueError('{0} already shorthand for {1}'.format(alias, self._alias[alias]))
+        self._alias[alias] = source
 
     def _add_option(self, name, argument_label=None):
 
@@ -498,7 +517,7 @@ class Parser(object):
         self._readers[name] = _SingleWordReader
 
         if argument_label is not None:
-            self.option_labels[name] = argument_label
+            self._option_labels[name] = argument_label
 
         return Option(name, self)
 
@@ -507,7 +526,7 @@ class Parser(object):
         if o is not None:
             return option, o
 
-        source = self.alias.get(option, None)
+        source = self._alias.get(option, None)
         if source is None:
             return option, None
 
@@ -576,7 +595,7 @@ class Parser(object):
             if argument_name:
                 self.user_values[argument_name] = argument_value
             else:
-                self.extras.append(arg)
+                self._extras.append(arg)
 
     def _help_if_necessary(self):
         if 'help' in self.user_values:
@@ -585,13 +604,13 @@ class Parser(object):
 
     def _find_duplicates(self):
         for key, values in self.user_values.iteritems():
-            if len(values) > 1 and key not in self.multiple:
+            if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError('%s specified multiple times' %
                         self._to_flag(key))
 
     def _find_requirements(self):
         for key, values in self.user_values.iteritems():
-            for r in self.requires.get(key, []):
+            for r in self._requires.get(key, []):
                 if self._localize(r) not in self.user_values:
                     raise DependencyError('%s requires %s' %
                             (self._to_flag(key), self._to_flag(r)))
@@ -613,7 +632,7 @@ class Parser(object):
 
     def _find_conflicts(self):
         for key, values in self.user_values.iteritems():
-            for r in self.conflicts.get(key, []):
+            for r in self._conflicts.get(key, []):
                 if r in self.user_values:
                     raise ConflictError('%s conflicts with %s' %
                             (self._to_flag(key),
@@ -628,7 +647,7 @@ class Parser(object):
     def _assign(self):
         for key, values in self.user_values.iteritems():
             try:
-                if key not in self.multiple:
+                if key not in self._multiple:
                     self._set_specified(key, values[0].get())
                 else:
                     self._set_specified(key, [v.get() for v in values])
@@ -658,8 +677,8 @@ class Parser(object):
             self._set_final(key, value)
 
         for key, value in self._readers.iteritems():
-            if key in self.defaults:
-                self._set_final(key, self.defaults[key])
+            if key in self._defaults:
+                self._set_final(key, self._defaults[key])
             else:
                 self._set_final(key, value.default())
 
@@ -748,18 +767,18 @@ class Parser(object):
     @localize
     @options_to_names
     def _set_multiple(self, name):
-        self.multiple.add(name)
+        self._multiple.add(name)
 
     @localize
     @options_to_names
     def _set_default(self, name, value):
-        self.defaults[name] = value
+        self._defaults[name] = value
 
     @localize_all
     @verify_args_exist
     @options_to_names
     def _set_requires(self, a, b):
-        self.requires[a] = b
+        self._requires.setdefault(a, []).append(b)
 
     @localize_all
     @verify_args_exist
@@ -771,7 +790,7 @@ class Parser(object):
     @verify_args_exist
     @options_to_names
     def _set_conflicts(self, a, b):
-        self.conflicts[a] = b
+        self._conflicts.setdefault(a, []).append(b)
 
     def __enter__(self):
         return self
@@ -780,11 +799,11 @@ class Parser(object):
         self.process_command_line()
 
     def _option_label(self, name):
-        return self.option_labels.get(name, 'option')
+        return self._option_labels.get(name, 'option')
 
     def _label(self, name):
         pkey = self._to_flag(name)
-        for k, v in self.alias.iteritems():
+        for k, v in self._alias.iteritems():
             if name in v:
                 pkey += ',' + self._to_flag(k)
 
