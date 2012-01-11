@@ -2,21 +2,6 @@ from functools import wraps
 from itertools import starmap, permutations
 import sys
 
-# Todo:
-#   ensure short prefix is subset of long prefix
-#   better error handlign (no exception raised with programmatic errors in with block)
-#   replace config
-#   * don't overwrite existing namespace (e.g., function name assumed to be value)
-#   X fixed? * can't have multiple unspecified_default
-#   * dependency language (e.g. a -> b or c)
-#   * show relationships in -h
-#   * make app (vs. existing) args more obvious
-#   * editdist spell suggestions (e.g., ``did you mean X?")
-#   * required mismatches with unspecified_default if arg is not made explicit
-#   * error is --one-flag not specified even if multiple are allowed
-#   * deal with difference between localized/non
-#   * enumeration type
-
 
 def Config(filename, dictionary=None, overwrite=True):
     if dictionary is None:
@@ -31,7 +16,7 @@ def Config(filename, dictionary=None, overwrite=True):
             if dictionary.get(toks[0], None) is not None and not overwrite:
                 continue
             dictionary.__setitem__(*toks)
-    
+
     return dictionary
 
 
@@ -124,7 +109,8 @@ class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
     e.g., one of -a and -b is required and neither is specified. '''
 
     def __init__(self, allowed):
-        super(ManyAllowedNoneSpecifiedArgumentError, self).__init__('[%s] not specified' % ', '.join(allowed))
+        super(ManyAllowedNoneSpecifiedArgumentError, self).__init__(('[%s] not'
+                + ' specified') % ', '.join(allowed))
 
 
 class UnspecifiedArgumentError(ArgumentError):
@@ -139,12 +125,16 @@ class MultipleSpecifiedArgumentError(ArgumentError):
 
 
 class DependencyError(ArgumentError):
-    ''' User specified an argument that requires another, unspecified argument. '''
+    ''' User specified an argument that requires another, unspecified argument.
+    '''
+
     pass
 
 
 class ConflictError(ArgumentError):
-    ''' User specified an argument that conflicts another specified argument. '''
+    ''' User specified an argument that conflicts another specified argument.
+    '''
+
     pass
 
 
@@ -168,7 +158,8 @@ class Option(object):
         ''' Specifiy other options which this argument requires.
 
         :param others: required options
-        :type others: sequence of either :class:`Option` or basestring of option names
+        :type others: sequence of either :class:`Option` or basestring of \
+                    option names
         '''
         [self.parser._set_requires(self.argname, x) for x in others]
         return self
@@ -181,7 +172,8 @@ class Option(object):
         ''' Specifiy other options which this argument conflicts with.
 
         :param others: conflicting options
-        :type others: sequence of either :class:`Option` or basestring of option names
+        :type others: sequence of either :class:`Option` or basestring of \
+            option names
         '''
         [self.parser._set_conflicts(self.argname, x) for x in others]
         return self
@@ -192,7 +184,8 @@ class Option(object):
 
         >>> parser.str('option').shorthand('o')
 
-        would cause '--option' and '-o' to be alias argument labels when invoked on the command line.
+        would cause '--option' and '-o' to be alias argument labels when
+        invoked on the command line.
 
         :param alias: alias of argument
         '''
@@ -238,7 +231,9 @@ class Option(object):
 
 # Argument readers help parse the command line. The flow is as follows:
 #
-# 1) We create a reader for each argument based on the type specified by the programmer (e.g., a bool will get a _FlagArgumentReader
+# 1) We create a reader for each argument based on the type specified by the
+#    programmer (e.g., a bool will get a _FlagArgumentReader
+#
 # 2) The reader is used when we hit the argument label
 
 
@@ -383,10 +378,10 @@ class Parser(object):
 
     def _init_user_set(self, store=None):
         self.user_values = {}
-        self.specified = {}
+        self._specified = {}
         if store is None:
             store = {}
-        self.store = store
+        self._store = store
         self._namemaps = {}
         self._rnamemaps = {}
 
@@ -463,7 +458,8 @@ class Parser(object):
 
         def caster(x):
             def raise_error():
-                raise FormatError('%s is not range format: N:N+i, N-N+i, or N N+i' % x)
+                raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
+                        + ' N+i') % x)
 
             for char in (' :-'):
                 if char in x:
@@ -516,7 +512,9 @@ class Parser(object):
         if source not in self._readers:
             raise ValueError('%s not an option' % source)
         if alias in self._alias:
-            raise ValueError('{0} already shorthand for {1}'.format(alias, self._alias[alias]))
+            raise ValueError('{0} already shorthand for {1}'.format(alias,
+                self._alias[alias]))
+
         self._alias[alias] = source
 
     def _add_option(self, name, argument_label=None):
@@ -618,8 +616,8 @@ class Parser(object):
     def _find_duplicates(self):
         for key, values in self.user_values.iteritems():
             if len(values) > 1 and key not in self._multiple:
-                raise MultipleSpecifiedArgumentError('%s specified multiple times' %
-                        self._to_flag(key))
+                raise MultipleSpecifiedArgumentError(('%s specified multiple'
+                        + ' times') % self._to_flag(key))
 
     def _find_requirements(self):
         for key, values in self.user_values.iteritems():
@@ -651,7 +649,6 @@ class Parser(object):
                             (self._to_flag(key),
                              self._to_flag(r)))
 
-
     def _validate_entries(self):
         self._find_duplicates()
         self._find_requirements()
@@ -665,25 +662,25 @@ class Parser(object):
                 self._set_specified(key, [v.get() for v in values])
 
         # check conditions
-        for key, value in self.specified.iteritems():
+        for key, value in self._specified.iteritems():
             val = self._conditions.get(key)
             if not val:
                 continue
 
             for cond in val:
-                if not cond(self.specified):
+                if not cond(self._specified):
                     raise FailedConditionError()
 
         for key, value in self._readers.iteritems():
-            if key not in self.specified:
+            if key not in self._specified:
                 res = self._required.get(key, None)
                 if res is not None:
                     if len(res) == 0:
-                        raise MissingRequiredArgumentError('No value passed for'
-                                + ' %s' % self._unlocalize(key))
+                        raise MissingRequiredArgumentError('No value passed'
+                                + ' for' + ' %s' % self._unlocalize(key))
 
                     for result in res:
-                        if result in self.specified:
+                        if result in self._specified:
                             break
                     else:
                         raise ManyAllowedNoneSpecifiedArgumentError(
@@ -692,7 +689,7 @@ class Parser(object):
 #                else: raise MissingRequiredArgumentError('No value passed for
 #                %s' % key)
 
-        for key, value in self.specified.iteritems():
+        for key, value in self._specified.iteritems():
             self._set_final(key, value)
 
         for key, value in self._readers.iteritems():
@@ -738,7 +735,7 @@ class Parser(object):
             self._help_if_necessary()
             self._validate_entries()
             self._assign()
-            store = self.store
+            store = self._store
         except ArgumentError as e:
             raise e
         finally:
@@ -765,14 +762,14 @@ class Parser(object):
         sys.exit(1)
 
     def _set_specified(self, key, value):
-        self.specified[key] = value
+        self._specified[key] = value
 
     def _set_final(self, key, value):
-        if key not in self.store:
+        if key not in self._store:
             cast = self._casts.get(key, None)
             if cast and value is not None:
                 if cast == Config:
-                    Config(value, self.store, overwrite=False)
+                    Config(value, self._store, overwrite=False)
                 else:
                     try:
                         value = cast(value)
@@ -781,7 +778,7 @@ class Parser(object):
                     except ValueError:
                         raise FormatError('Cannot cast %s to %s', value, cast)
 
-            self.store[key] = value
+            self._store[key] = value
 
     @localize
     @options_to_names
