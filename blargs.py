@@ -3,6 +3,8 @@ from itertools import starmap, permutations
 import sys
 
 # Todo:
+#   ensure short prefix is subset of long prefix
+#   better error handlign (no exception raised with programmatic errors in with block)
 #   replace config
 #   * don't overwrite existing namespace (e.g., function name assumed to be value)
 #   X fixed? * can't have multiple unspecified_default
@@ -99,19 +101,6 @@ def localize(f):
 # ---------- end decorators ---------- #
 
 
-class Multidict(dict):
-    class _MyList(list):
-        pass
-
-    def __setitem__(self, key, value):
-        v = self.get(key, None)
-        if v is None:
-            v = Multidict._MyList()
-            super(Multidict, self).__setitem__(key, v)
-
-        v.append(value)
-
-
 # ---------- exceptions ---------- #
 
 
@@ -158,6 +147,11 @@ class ConflictError(ArgumentError):
     ''' User specified an argument that conflicts another specified argument. '''
     pass
 
+
+class FailedConditionError(ArgumentError):
+    ''' Condition failed. '''
+    pass
+
 # ---------- end exceptions ---------- #
 
 
@@ -177,6 +171,10 @@ class Option(object):
         :type others: sequence of either :class:`Option` or basestring of option names
         '''
         [self.parser._set_requires(self.argname, x) for x in others]
+        return self
+
+    def condition(self, func):
+        self.parser._set_condition(self.argname, func)
         return self
 
     def conflicts(self, *others):
@@ -222,6 +220,7 @@ class Option(object):
         ''' Argument is required unless replacements specified. '''
 
         self.parser._set_required(self.argname, replacements)
+        return self
 
     def unspecified_default(self):
         ''' Indicate that values passed without argument labels will be
@@ -233,6 +232,7 @@ class Option(object):
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
         self.parser._set_multiple(self.argname)
+        return self
 
 # ---------- Argument readers ---------- #
 
@@ -342,6 +342,9 @@ class Parser(object):
         # prefix to fullname args
         self._double_flag = '--'
 
+        # function conditions
+        self._conditions = {}
+
         # help message
         self._help_prefix = None
 
@@ -363,6 +366,8 @@ class Parser(object):
         ''' Set the single flag prefix. This appears before short arguments
         (e.g., -a). '''
 
+        if self._double_flag in flag:
+            raise ValueError('single_flag cannot be superset of double_flag')
         self._single_flag = flag
         return self
 
@@ -370,11 +375,14 @@ class Parser(object):
         ''' Set the double flag prefix. This appears before long arguments
         (e.g., --arg). '''
 
+        if flag in self._single_flag:
+            raise ValueError('single_flag cannot be superset of double_flag')
+
         self._double_flag = flag
         return self
 
     def _init_user_set(self, store=None):
-        self.user_values = Multidict()
+        self.user_values = {}
         self.specified = {}
         if store is None:
             store = {}
@@ -430,6 +438,10 @@ class Parser(object):
     @options_to_names
     def _set_required(self, name, replacements=None):
         self._required.setdefault(name, []).extend(replacements or [])
+
+    @localize
+    def _set_condition(self, name, condition):
+        self._conditions.setdefault(name, []).append(condition)
 
     def config(self, name):
         return self._add_option(name).cast(Config)
@@ -593,7 +605,8 @@ class Parser(object):
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
-                self.user_values[argument_name] = argument_value
+                self.user_values.setdefault(argument_name,
+                        []).append(argument_value)
             else:
                 self._extras.append(arg)
 
@@ -646,14 +659,20 @@ class Parser(object):
 
     def _assign(self):
         for key, values in self.user_values.iteritems():
-            try:
-                if key not in self._multiple:
-                    self._set_specified(key, values[0].get())
-                else:
-                    self._set_specified(key, [v.get() for v in values])
-            except ValueError:
-                raise MissingRequiredArgumentError('No value passed for %s' %
-                        self._unlocalize(key))
+            if key not in self._multiple:
+                self._set_specified(key, values[0].get())
+            else:
+                self._set_specified(key, [v.get() for v in values])
+
+        # check conditions
+        for key, value in self.specified.iteritems():
+            val = self._conditions.get(key)
+            if not val:
+                continue
+
+            for cond in val:
+                if not cond(self.specified):
+                    raise FailedConditionError()
 
         for key, value in self._readers.iteritems():
             if key not in self.specified:

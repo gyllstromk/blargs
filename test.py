@@ -13,6 +13,14 @@ class TestCase(unittest.TestCase):
         except TypeError:
             self.fail()
 
+    def test_condition(self):
+        p = Parser()
+        p.str('a').condition(lambda x: x['b'] != 'c')
+        p.str('b')
+
+        p._process_command_line(['-a', '1', '-b', 'b'])
+        self.assertRaises(FailedConditionError, p._process_command_line, ['-a', '1', '-b', 'c'])
+
     def test_localize(self):
         p = Parser.with_locals()
         p.str('multi-word').requires(p.str('another-multi-word'))
@@ -43,6 +51,8 @@ class TestCase(unittest.TestCase):
         self.assertEquals(vals['aa'], 'a c d')
         vals = p._process_command_line(['Maa', 'a', 'c', 'd', '+a', 'b'])
         self.assertEquals(vals['aa'], 'a c d')
+
+        self.assertRaises(ValueError, Parser().single_flag('++').double_flag, '+')
 
     def x_test_with_files(self):
         d = TemporaryDirectory()
@@ -115,7 +125,8 @@ class TestCase(unittest.TestCase):
                 p._process_command_line, ['-x', '1', '-x', '2'])
 
         p = Parser()
-        p.str('x').multiple()
+        x = p.str('x').multiple()
+        self.assertTrue(x != None)
 
         p._process_command_line(['-x', '1', '-x', '2'])
 
@@ -218,7 +229,8 @@ class TestCase(unittest.TestCase):
                 p._process_command_line, [])
 
         p = Parser()
-        p.str('x').unless('y', 'z')
+        x = p.str('x').unless('y', 'z')
+        self.assertTrue(x != None)
         p.str('y')
         p.str('z')
         self.assertRaises(ManyAllowedNoneSpecifiedArgumentError,
