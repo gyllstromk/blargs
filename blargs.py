@@ -454,7 +454,19 @@ class Parser(object):
         return self._add_option(name)
 
     def range(self, name):
-        ''' Range type, specified as python range. XXX '''
+        ''' Range type. Accepts similar values to that of python's py:`range`
+            and py:`xrange`. Accepted delimiters are space, -, and :.
+
+            >>> with Parser() as p:
+            ...   p.range('values')
+
+            Now accepts:
+
+              python test.py --values 0-1  # -> xrange(0, 1)
+              python test.py --values 0:10:2  # -> xrange(0, 10, 2)
+              python test.py --values 0 10 3  # -> xrange(0, 10, 3)
+              python test.py --values 10  # -> xrange(10)
+        '''
 
         def caster(x):
             def raise_error():
@@ -487,6 +499,11 @@ class Parser(object):
 
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
+            >>> with Parser() as p:
+            ...   p.multiword('multi')
+
+            Now accepts:
+
               python test.py --multi path to something
 
         '''
