@@ -14,6 +14,13 @@ optparse from Python's standard library. The main distinctions are:
 
 Use blargs if
 
+Installation
+------------
+
+Pip is your friend here:
+
+    pip install blargs
+
 .. currentmodule:: blargs
 
 Parser

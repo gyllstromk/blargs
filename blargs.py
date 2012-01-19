@@ -90,7 +90,11 @@ def localize(f):
 
 
 class ArgumentError(ValueError):
-    ''' Passed to user. '''
+    ''' Root class of all arguments that are thrown due to user input which
+    violates a rule set by the parser. In other words, errors of this type
+    should be caught and communicated to the user some how. The default
+    behavior is to signal the particular error and show the `usage`.'''
+        
     pass
 
 
