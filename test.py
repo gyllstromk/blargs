@@ -13,6 +13,17 @@ class TestCase(unittest.TestCase):
         except TypeError:
             self.fail()
 
+    def test_enum(self):
+        p = Parser()
+        default = '1'
+        p.enum('a', ['1', '2', 'b']).default(default)
+        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
+        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
+        for arg in ('1', '2', 'b'):
+            self.assertEquals(p._process_command_line(['--a', arg])['a'], arg)
+
+        self.assertEquals(p._process_command_line([])['a'], default)
+
     def test_condition(self):
         p = Parser()
         p.str('a').condition(lambda x: x['b'] != 'c')

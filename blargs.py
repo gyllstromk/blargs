@@ -142,6 +142,11 @@ class FailedConditionError(ArgumentError):
     ''' Condition failed. '''
     pass
 
+
+class InvalidEnumValueError(ArgumentError):
+    ''' Enum value provided not allowed. '''
+    pass
+
 # ---------- end exceptions ---------- #
 
 
@@ -448,6 +453,16 @@ class Parser(object):
     def float(self, name):
         ''' Add float argument. '''
         return self._add_option(name).cast(float)
+
+    def enum(self, name, values):
+        ''' Add enum type. '''
+
+        def inner(value):
+            if not value in values:
+                raise InvalidEnumValueError()
+            return value
+
+        return self._add_option(name).cast(inner)
 
     def str(self, name):
         ''' Add :py:class:`str` argument. '''
@@ -775,6 +790,8 @@ class Parser(object):
                         value = cast(value)
                     except FormatError:
                         raise
+                    except ArgumentError as e:
+                        raise e
                     except ValueError:
                         raise FormatError('Cannot cast %s to %s', value, cast)
 
@@ -864,8 +881,11 @@ class IOParser(Parser):
         from plyny.plio.files import open_path
 
         def opener(x):
-            f = open_path(x, True)
-            f.set_locked(True)
+            try:
+                f = open_path(x, True)
+#            f.set_locked(True)
+            except Exception as e:
+                print e
             return f
 
         result = self._add_option(name).cast(opener)
