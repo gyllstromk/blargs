@@ -29,7 +29,7 @@ def options_to_names(f):
     def inner(*args, **kwargs):
         new_args = []
         for arg in args[1:]:
-            if isinstance(arg, Option):
+            if isinstance(arg, Option) and not isinstance(arg, Group):
                 arg = arg.argname
 
             new_args.append(arg)
@@ -105,7 +105,10 @@ class FormatError(ArgumentError):
 
 class MissingRequiredArgumentError(ArgumentError):
     ''' Required argument not specified. '''
-    pass
+
+    def __init__(self, arg):
+        super(MissingRequiredArgumentError, self).__init__('No value passed for'
+                + '%s' % arg)
 
 
 class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
@@ -114,7 +117,7 @@ class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
 
     def __init__(self, allowed):
         super(ManyAllowedNoneSpecifiedArgumentError, self).__init__(('[%s] not'
-                + ' specified') % ', '.join(allowed))
+                + ' specified') % ', '.join(map(str, allowed)))
 
 
 class UnspecifiedArgumentError(ArgumentError):
@@ -139,11 +142,18 @@ class ConflictError(ArgumentError):
     ''' User specified an argument that conflicts another specified argument.
     '''
 
-    pass
-
+    def __init__(self, offender1, offender2):
+        super(ConflictError, self).__init__('%s conflicts with %s' %
+                (offender1, offender2))
+        
 
 class FailedConditionError(ArgumentError):
     ''' Condition failed. '''
+    pass
+
+
+class InvalidEnumValueError(ArgumentError):
+    ''' Enum value provided not allowed. '''
     pass
 
 # ---------- end exceptions ---------- #
@@ -156,7 +166,7 @@ class Option(object):
         parsing. '''
 
         self.argname = argname
-        self.parser = parser
+        self._parser = parser
 
     def requires(self, *others):
         ''' Specifiy other options which this argument requires.
@@ -165,11 +175,11 @@ class Option(object):
         :type others: sequence of either :class:`Option` or basestring of \
                     option names
         '''
-        [self.parser._set_requires(self.argname, x) for x in others]
+        [self._parser._set_requires(self.argname, x) for x in others]
         return self
 
     def condition(self, func):
-        self.parser._set_condition(self.argname, func)
+        self._parser._set_condition(self.argname, func)
         return self
 
     def conflicts(self, *others):
@@ -179,7 +189,7 @@ class Option(object):
         :type others: sequence of either :class:`Option` or basestring of \
             option names
         '''
-        [self.parser._set_conflicts(self.argname, x) for x in others]
+        [self._parser._set_conflicts(self.argname, x) for x in others]
         return self
 
     def shorthand(self, alias):
@@ -194,41 +204,41 @@ class Option(object):
         :param alias: alias of argument
         '''
 
-        self.parser._add_shorthand(self.argname, alias)
+        self._parser._add_shorthand(self.argname, alias)
         return self
 
     def default(self, value):
         ''' Provide a default value for this argument. '''
-        self.parser._set_default(self.argname, value)
+        self._parser._set_default(self.argname, value)
         return self
 
     def cast(self, cast):
         ''' Provide a casting value for this argument. '''
-        self.parser._casts[self.argname] = cast
+        self._parser._casts[self.argname] = cast
         return self
 
     def required(self):
         ''' Indicate that this argument is required. '''
 
-        self.parser._set_required(self.argname)
+        self._parser._set_required(self.argname)
         return self
 
     def unless(self, *replacements):
         ''' Argument is required unless replacements specified. '''
 
-        self.parser._set_required(self.argname, replacements)
+        self._parser._set_required(self.argname, replacements)
         return self
 
     def unspecified_default(self):
         ''' Indicate that values passed without argument labels will be
         attributed to this argument. '''
 
-        self.parser._set_unspecified_default(self.argname)
+        self._parser._set_unspecified_default(self.argname)
         return self
 
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
-        self.parser._set_multiple(self.argname)
+        self._parser._set_multiple(self.argname)
         return self
 
 # ---------- Argument readers ---------- #
@@ -308,6 +318,26 @@ class _SingleWordReader(_ArgumentReader):
 # ---------- Argument readers ---------- #
 
 
+class Group(object):
+    def __init__(self, parser, *names):
+        self._parser = parser
+#        super(Group, self).__init__('group', parser)
+        self._names = names
+
+    def default(self, name):
+        if name not in self._names:
+            raise ValueError('%s not in group' % name)
+
+        self._default = name
+        return self
+
+    def _is_provided(self, parsed):
+        for item in self._names:
+            if item in parsed:
+                return True
+        return False
+
+
 class Parser(object):
     ''' Command line parser. '''
 
@@ -381,8 +411,7 @@ class Parser(object):
         return self
 
     def _init_user_set(self, store=None):
-        self.user_values = {}
-        self._specified = {}
+        self._preparsed = {}
         if store is None:
             store = {}
         self._store = store
@@ -418,8 +447,11 @@ class Parser(object):
 
                 self._set_requires(v, vi)
 
+    def at_least_one(self, *names):
+        return self._require_at_least_one(*names)
+
     @options_to_names
-    def require_at_least_one(self, *names):
+    def _require_at_least_one(self, *names):
         ''' At least one of the arguments is required. '''
 
         s = set(names)
@@ -452,6 +484,16 @@ class Parser(object):
     def float(self, name):
         ''' Add float argument. '''
         return self._add_option(name).cast(float)
+
+    def enum(self, name, values):
+        ''' Add enum type. '''
+
+        def inner(value):
+            if not value in values:
+                raise InvalidEnumValueError()
+            return value
+
+        return self._add_option(name).cast(inner)
 
     def str(self, name):
         ''' Add :py:class:`str` argument. '''
@@ -624,26 +666,26 @@ class Parser(object):
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
-                self.user_values.setdefault(argument_name,
+                self._preparsed.setdefault(argument_name,
                         []).append(argument_value)
             else:
                 self._extras.append(arg)
 
     def _help_if_necessary(self):
-        if 'help' in self.user_values:
+        if 'help' in self._preparsed:
             self.print_help()
             sys.exit(0)
 
     def _find_duplicates(self):
-        for key, values in self.user_values.iteritems():
+        for key, values in self._preparsed.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple'
                         + ' times') % self._to_flag(key))
 
     def _find_requirements(self):
-        for key, values in self.user_values.iteritems():
+        for key, values in self._preparsed.iteritems():
             for r in self._requires.get(key, []):
-                if self._localize(r) not in self.user_values:
+                if self._localize(r) not in self._preparsed:
                     raise DependencyError('%s requires %s' %
                             (self._to_flag(key), self._to_flag(r)))
 
@@ -654,7 +696,7 @@ class Parser(object):
             need_to_satisfy = reqs[0]
 
             for r in reqs[1]:
-                if self._localize(r) in self.user_values:
+                if self._localize(r) in self._preparsed:
                     need_to_satisfy -= 1
 
             if need_to_satisfy > 0:
@@ -663,45 +705,83 @@ class Parser(object):
                         reqs[1]))))
 
     def _find_conflicts(self):
-        for key, values in self.user_values.iteritems():
-            for r in self._conflicts.get(key, []):
-                if r in self.user_values:
+        for arg in self._preparsed.iterkeys():
+            for r in self._conflicts.get(arg, []):
+                if r in self._preparsed:
                     raise ConflictError('%s conflicts with %s' %
-                            (self._to_flag(key),
+                            (self._to_flag(arg),
                              self._to_flag(r)))
 
     def _validate_entries(self):
         self._find_duplicates()
         self._find_requirements()
-        self._find_conflicts()
+#        self._find_conflicts()
 
     def _assign(self):
-        for key, values in self.user_values.iteritems():
+        parsed = {}
+        for key, values in self._preparsed.iteritems():
             if key not in self._multiple:
-                self._set_specified(key, values[0].get())
+                parsed[key] = values[0].get()
             else:
-                self._set_specified(key, [v.get() for v in values])
+                parsed[key] = [v.get() for v in values]
 
         # check conditions
-        for key, value in self._specified.iteritems():
+        for key, value in parsed.iteritems():
             val = self._conditions.get(key)
             if not val:
                 continue
 
             for cond in val:
-                if not cond(self._specified):
+                if not cond(parsed):
                     raise FailedConditionError()
 
+        for arg, replacements in self._required.iteritems():
+            missing = []
+            if isinstance(arg, Group):
+                provided = arg._is_provided(parsed)
+            else:
+                provided = arg in parsed
+
+            if not provided:
+                for v in replacements:
+                    if isinstance(v, Group):
+                        missing += v._names
+                        if v._is_provided(parsed):
+                            break
+                    else:
+                        missing.append(v)
+                        if v in parsed:
+                            break
+                else:
+                    if missing:
+                        raise ManyAllowedNoneSpecifiedArgumentError([arg] + missing)
+                    else:
+                        raise MissingRequiredArgumentError(arg)
+
+        for arg, conflicts in self._conflicts.iteritems():
+            if isinstance(arg, Group):
+                provided = arg._is_provided(parsed)
+            else:
+                provided = arg in parsed
+
+            if provided:
+                for conflict in conflicts:
+                    if isinstance(conflict, Group):
+                        if conflict._is_provided(parsed):
+                            raise ConflictError(arg, conflict)
+                    elif conflict in parsed:
+                        raise ConflictError(arg, conflict)
+
         for key, value in self._readers.iteritems():
-            if key not in self._specified:
-                res = self._required.get(key, None)
+            if key not in parsed:
+                res = self._required.get(key)
                 if res is not None:
                     if len(res) == 0:
                         raise MissingRequiredArgumentError('No value passed'
                                 + ' for' + ' %s' % self._unlocalize(key))
 
                     for result in res:
-                        if result in self._specified:
+                        if result in parsed:
                             break
                     else:
                         raise ManyAllowedNoneSpecifiedArgumentError(
@@ -710,7 +790,7 @@ class Parser(object):
 #                else: raise MissingRequiredArgumentError('No value passed for
 #                %s' % key)
 
-        for key, value in self._specified.iteritems():
+        for key, value in parsed.iteritems():
             self._set_final(key, value)
 
         for key, value in self._readers.iteritems():
@@ -720,12 +800,13 @@ class Parser(object):
                 self._set_final(key, value.default())
 
     @options_to_names
-    def set_one_required(self, *names):
+    def _set_one_required(self, *names):
         self.mutually_exclude(*names)
-        self.require_at_least_one(*names)
+        self._require_at_least_one(*names)
 
     def require_one(self, *names):
-        self.set_one_required(*names)
+        self._set_one_required(*names)
+        return Group(self, *names)
 
     @options_to_names
     def all_require(self, required, *names):
@@ -734,10 +815,12 @@ class Parser(object):
     @options_to_names
     def mutually_require(self, *names):
         list(starmap(self._set_requires, permutations(names, 2)))
+        return Group(self, *names)
 
     @options_to_names
     def mutually_exclude(self, *names):
         list(starmap(self._set_conflicts, permutations(names, 2)))
+        return Group(self, *names)
 
     def _get_args(self, args):
         if args is None:
@@ -782,9 +865,6 @@ class Parser(object):
         print
         sys.exit(1)
 
-    def _set_specified(self, key, value):
-        self._specified[key] = value
-
     def _set_final(self, key, value):
         if key not in self._store:
             cast = self._casts.get(key, None)
@@ -796,6 +876,8 @@ class Parser(object):
                         value = cast(value)
                     except FormatError:
                         raise
+                    except ArgumentError as e:
+                        raise e
                     except ValueError:
                         raise FormatError('Cannot cast %s to %s', value, cast)
 
@@ -885,8 +967,11 @@ class IOParser(Parser):
         from plyny.plio.files import open_path
 
         def opener(x):
-            f = open_path(x, True)
-            f.set_locked(True)
+            try:
+                f = open_path(x, True)
+#            f.set_locked(True)
+            except Exception as e:
+                print e
             return f
 
         result = self._add_option(name).cast(opener)

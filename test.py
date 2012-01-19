@@ -5,6 +5,35 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
+    def test_groups(self):
+        p = Parser()
+        p.require_one(
+            p.mutually_exclude(
+                p.flag('a'),
+                p.flag('b')
+            ),
+            p.mutually_exclude(
+                p.flag('c'),
+                p.flag('d')
+            )
+        )
+
+        self.assertRaises(ManyAllowedNoneSpecifiedArgumentError, p._process_command_line, [])
+        p._process_command_line(['--a'])
+        p._process_command_line(['--b'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--a', '--c'])
+
+        p = Parser()
+        p.mutually_exclude(
+            p.flag('a'),
+            p.flag('b')
+        ).requires(
+            p.mutually_exclude(
+                p.flag('c'),
+                p.flag('d')
+            )
+        )
+
     def test_errors(self):
         p = Parser()
         p.int('a')
@@ -12,6 +41,17 @@ class TestCase(unittest.TestCase):
             p._process_command_line([])
         except TypeError:
             self.fail()
+
+    def test_enum(self):
+        p = Parser()
+        default = '1'
+        p.enum('a', ['1', '2', 'b']).default(default)
+        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
+        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
+        for arg in ('1', '2', 'b'):
+            self.assertEquals(p._process_command_line(['--a', arg])['a'], arg)
+
+        self.assertEquals(p._process_command_line([])['a'], default)
 
     def test_condition(self):
         p = Parser()
@@ -220,8 +260,7 @@ class TestCase(unittest.TestCase):
     def test_required(self):
         p = Parser()
         p.str('x').required()
-        self.assertRaises(MissingRequiredArgumentError,
-                p._process_command_line, [])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, [])
 
         p = Parser()
         p.str('x').required()
@@ -303,10 +342,7 @@ class TestCase(unittest.TestCase):
             return p
 
         self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
-        try:
-            create()._process_command_line(['-y'])
-        except:
-            self.assertTrue(False)
+        create()._process_command_line(['-y'])
 
         try:
             create()._process_command_line(['-x'])
@@ -380,7 +416,7 @@ class TestCase(unittest.TestCase):
             p.str('y')
             p.str('z')
 
-            p.require_at_least_one('x', 'y', 'z')
+            p.at_least_one('x', 'y', 'z')
             return p
 
         create()._process_command_line(['-x', '1'])
@@ -414,7 +450,7 @@ class TestCase(unittest.TestCase):
             p.str('y')
             p.str('z')
 
-            p.set_one_required(*'xyz')
+            p.require_one(*'xyz')
             return p
 
         create()._process_command_line(['-x', '1'])
@@ -427,7 +463,7 @@ class TestCase(unittest.TestCase):
         p = Parser()
         p.flag('a')
         p.flag('b')
-        p.set_one_required('a', 'b')
+        p.require_one('a', 'b')
         p._process_command_line(['-b'])
 
 if __name__ == '__main__':
