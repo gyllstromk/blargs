@@ -100,21 +100,21 @@ Exceptions
 .. autoclass::  ConflictError
 .. autoclass::  UnspecifiedArgumentError
 
-#>>> with Parser(locals()) as p:
-#...    p.add_int('first').requires(
-#...       p.add_flag('second'),
-#...       p.add_option('third'),
-#...    )
-#...    p.add_int('fourth').conflicts('first')
-#
-#When the with clause terminates, the arguments are parsed from sys.argv. The following command lines will be rejected:
-#
-#    python test.py --first 3  # does not supply second or third
-#
-#    python test.py --first 3 --second --third 'hello' --fourth 3  # fourth conflicts
-#
-#The following will be accepted
-#
-#  python test.py
-#
-#  python test.py --first 3 --second --third 'hello'
+.. #>>> with Parser(locals()) as p:
+.. #...    p.add_int('first').requires(
+.. #...       p.add_flag('second'),
+.. #...       p.add_option('third'),
+.. #...    )
+.. #...    p.add_int('fourth').conflicts('first')
+.. #
+.. #When the with clause terminates, the arguments are parsed from sys.argv. The following command lines will be rejected:
+.. #
+.. #    python test.py --first 3  # does not supply second or third
+.. #
+.. #    python test.py --first 3 --second --third 'hello' --fourth 3  # fourth conflicts
+.. #
+.. #The following will be accepted
+.. #
+.. #  python test.py
+.. #
+.. #  python test.py --first 3 --second --third 'hello'
