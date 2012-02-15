@@ -34,6 +34,16 @@ class TestCase(unittest.TestCase):
             )
         )
 
+        self.assertRaises(DependencyError, p._process_command_line, ['--a'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--b'])
+        p._process_command_line(['--c'])
+        p._process_command_line(['--d'])
+
+        p._process_command_line(['--a', '--c'])
+        p._process_command_line(['--b', '--c'])
+        p._process_command_line(['--a', '--d'])
+        p._process_command_line(['--b', '--d'])
+
     def test_errors(self):
         p = Parser()
         p.int('a')
@@ -268,10 +278,10 @@ class TestCase(unittest.TestCase):
                 p._process_command_line, [])
 
         p = Parser()
-        x = p.str('x').unless('y', 'z')
-        self.assertTrue(x != None)
         p.str('y')
         p.str('z')
+        x = p.str('x').unless('y', 'z')
+        self.assertTrue(x != None)
         self.assertRaises(ManyAllowedNoneSpecifiedArgumentError,
                 p._process_command_line, [])
         p._process_command_line(['--y', 'a'])
@@ -425,7 +435,7 @@ class TestCase(unittest.TestCase):
         create()._process_command_line(['-x', '1', '-y', '1'])
         self.assertRaises(ManyAllowedNoneSpecifiedArgumentError, create()._process_command_line, [])
 
-    def test_requires_n(self):
+    def x_test_requires_n(self):
         p = Parser()
         p.flag('x')
         p.flag('y')

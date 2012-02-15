@@ -22,6 +22,20 @@ def Config(filename, dictionary=None, overwrite=True):
 
 # ---------- decorators ---------- #
 
+def names_to_options(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        new_args = []
+        for arg in args[1:]:
+            if isinstance(arg, basestring):
+                arg = args[0]._options[arg]
+
+            new_args.append(arg)
+
+        return f(*[args[0]] + new_args, **kwargs)
+
+    return inner
+
 def options_to_names(f):
     ''' Convert any :class:`Option`s to names. '''
 
@@ -167,6 +181,7 @@ class Option(object):
 
         self.argname = argname
         self._parser = parser
+        self._conditions = []
 
     def requires(self, *others):
         ''' Specifiy other options which this argument requires.
@@ -179,7 +194,7 @@ class Option(object):
         return self
 
     def condition(self, func):
-        self._parser._set_condition(self.argname, func)
+        self._conditions.append(func)
         return self
 
     def conflicts(self, *others):
@@ -240,6 +255,10 @@ class Option(object):
         ''' Indicate that the argument can be specified multiple times. '''
         self._parser._set_multiple(self.argname)
         return self
+
+    def _is_provided(self, parsed):
+        return self.argname in parsed
+
 
 # ---------- Argument readers ---------- #
 
@@ -318,11 +337,12 @@ class _SingleWordReader(_ArgumentReader):
 # ---------- Argument readers ---------- #
 
 
-class Group(object):
+class Group(Option):
     def __init__(self, parser, *names):
         self._parser = parser
 #        super(Group, self).__init__('group', parser)
         self._names = names
+        self.argname = self
 
     def default(self, name):
         if name not in self._names:
@@ -342,6 +362,7 @@ class Parser(object):
     ''' Command line parser. '''
 
     def __init__(self, store=None, default_help=True):
+        self._options = {}
         self._readers = {}
         self._option_labels = {}
         self._multiple = set()
@@ -370,9 +391,6 @@ class Parser(object):
 
         # prefix to fullname args
         self._double_flag = '--'
-
-        # function conditions
-        self._conditions = {}
 
         # help message
         self._help_prefix = None
@@ -466,13 +484,16 @@ class Parser(object):
         self._unspecified_default = name
 
     @localize
-    @options_to_names
-    def _set_required(self, name, replacements=None):
-        self._required.setdefault(name, []).extend(replacements or [])
+    @verify_args_exist
+    @names_to_options
+    def _set_required(self, arg, replacements=None):
+        newreplacements = []
+        for item in replacements or []:
+            if not isinstance(item, Option):
+                item = self._options[item]
+            newreplacements.append(item)
 
-    @localize
-    def _set_condition(self, name, condition):
-        self._conditions.setdefault(name, []).append(condition)
+        self._required.setdefault(arg, []).extend(newreplacements)
 
     def config(self, name):
         return self._add_option(name).cast(Config)
@@ -581,7 +602,6 @@ class Parser(object):
         self._alias[alias] = source
 
     def _add_option(self, name, argument_label=None):
-
         name = self._localize(name)
 
         if name in self._readers:
@@ -592,7 +612,9 @@ class Parser(object):
         if argument_label is not None:
             self._option_labels[name] = argument_label
 
-        return Option(name, self)
+        o = Option(name, self)
+        self._options[name] = o
+        return o
 
     def _getoption(self, option):
         o = self._readers.get(option, None)
@@ -676,7 +698,7 @@ class Parser(object):
             self.print_help()
             sys.exit(0)
 
-    def _find_duplicates(self):
+    def _check_user_specified(self):
         for key, values in self._preparsed.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple'
@@ -704,17 +726,9 @@ class Parser(object):
                     (self._to_flag(r), ', '.join((self._to_flag(x) for x in
                         reqs[1]))))
 
-    def _find_conflicts(self):
-        for arg in self._preparsed.iterkeys():
-            for r in self._conflicts.get(arg, []):
-                if r in self._preparsed:
-                    raise ConflictError('%s conflicts with %s' %
-                            (self._to_flag(arg),
-                             self._to_flag(r)))
-
     def _validate_entries(self):
-        self._find_duplicates()
-        self._find_requirements()
+        pass
+#        self._find_requirements()
 #        self._find_conflicts()
 
     def _assign(self):
@@ -726,66 +740,40 @@ class Parser(object):
                 parsed[key] = [v.get() for v in values]
 
         # check conditions
-        for key, value in parsed.iteritems():
-            val = self._conditions.get(key)
-            if not val:
-                continue
-
-            for cond in val:
+        for arg in parsed.iterkeys():
+            for cond in self._options[arg]._conditions:
                 if not cond(parsed):
                     raise FailedConditionError()
 
         for arg, replacements in self._required.iteritems():
             missing = []
-            if isinstance(arg, Group):
-                provided = arg._is_provided(parsed)
-            else:
-                provided = arg in parsed
-
-            if not provided:
+            if not arg._is_provided(parsed):
                 for v in replacements:
                     if isinstance(v, Group):
                         missing += v._names
-                        if v._is_provided(parsed):
-                            break
                     else:
                         missing.append(v)
-                        if v in parsed:
-                            break
+
+                    if v._is_provided(parsed):
+                        break
                 else:
                     if missing:
                         raise ManyAllowedNoneSpecifiedArgumentError([arg] + missing)
                     else:
                         raise MissingRequiredArgumentError(arg)
 
-        for arg, conflicts in self._conflicts.iteritems():
-            if isinstance(arg, Group):
-                provided = arg._is_provided(parsed)
-            else:
-                provided = arg in parsed
+        for arg, deps in self._requires.iteritems():
+            if arg._is_provided(parsed):
+                for v in deps:
+                    if not v._is_provided(parsed):
+                        raise DependencyError(v)
 
-            if provided:
+        for arg, conflicts in self._conflicts.iteritems():
+            if arg._is_provided(parsed):
                 for conflict in conflicts:
-                    if isinstance(conflict, Group):
-                        if conflict._is_provided(parsed):
-                            raise ConflictError(arg, conflict)
-                    elif conflict in parsed:
+                    if conflict._is_provided(parsed):
                         raise ConflictError(arg, conflict)
 
-        for key, value in self._readers.iteritems():
-            if key not in parsed:
-                res = self._required.get(key)
-                if res is not None:
-                    if len(res) == 0:
-                        raise MissingRequiredArgumentError('No value passed'
-                                + ' for' + ' %s' % self._unlocalize(key))
-
-                    for result in res:
-                        if result in parsed:
-                            break
-                    else:
-                        raise ManyAllowedNoneSpecifiedArgumentError(
-                                [self._to_flag(x) for x in [key] + list(res)])
 
 #                else: raise MissingRequiredArgumentError('No value passed for
 #                %s' % key)
@@ -837,7 +825,8 @@ class Parser(object):
             args = self._parse(args)
             self._read(args)
             self._help_if_necessary()
-            self._validate_entries()
+
+            self._check_user_specified()
             self._assign()
             store = self._store
         except ArgumentError as e:
@@ -895,7 +884,7 @@ class Parser(object):
 
     @localize_all
     @verify_args_exist
-    @options_to_names
+    @names_to_options
     def _set_requires(self, a, b):
         self._requires.setdefault(a, []).append(b)
 
@@ -907,7 +896,7 @@ class Parser(object):
 
     @localize_all
     @verify_args_exist
-    @options_to_names
+    @names_to_options
     def _set_conflicts(self, a, b):
         self._conflicts.setdefault(a, []).append(b)
 
