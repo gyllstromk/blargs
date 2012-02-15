@@ -160,6 +160,9 @@ class TestCase(unittest.TestCase):
         v = p._process_command_line(['-a', '0', '9'])
         self.assertTrue(xrange_equals(v['a'], xrange(0, 9)))
 
+        v = p._process_command_line(['-a', '9'])
+        self.assertTrue(xrange_equals(v['a'], xrange(9)))
+
         v = p._process_command_line(['-a', '0', '9', '3'])
         self.assertTrue(xrange_equals(v['a'], xrange(0, 9, 3)))
 
