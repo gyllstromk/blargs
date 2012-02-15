@@ -123,6 +123,9 @@ class MissingRequiredArgumentError(ArgumentError):
     ''' Required argument not specified. '''
 
     def __init__(self, arg):
+        if isinstance(arg, Option):
+            arg = arg.argname
+
         super(MissingRequiredArgumentError, self).__init__('No value passed for'
                 + ' %s' % arg)
 
@@ -580,6 +583,8 @@ class Parser(object):
             ...   p.range('values')
 
             Now accepts:
+
+            ::
 
               python test.py --values 0-1  # -> xrange(0, 1)
               python test.py --values 0:10:2  # -> xrange(0, 10, 2)
