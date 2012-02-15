@@ -153,6 +153,9 @@ To use:
 
   python test.py --arg1 hello --arg1 world
 
+By indicating ``multiple``, the variable is stored as a ``list`` *even* if only
+one instance is specified by the user.
+
 Indicating default values
 -------------------------
 
@@ -183,9 +186,6 @@ Now, an argument without a label will be saved to ``arg1'':
 
   python test.py hello  # arg1 = 'hello'
   python test.py --arg2 world hello   # arg1 = 'hello', arg2 = 'world'
-
-By indicating ``multiple``, the variable is stored as a ``list`` *even* if only
-one instance is specified by the user.
 
 Conditions
 ----------
