@@ -1,3 +1,4 @@
+import operator
 from functools import wraps
 from itertools import starmap, permutations
 import sys
@@ -22,7 +23,7 @@ def Config(filename, dictionary=None, overwrite=True):
 
 # ---------- decorators ---------- #
 
-def names_to_options(f):
+def _names_to_options(f):
     @wraps(f)
     def inner(*args, **kwargs):
         new_args = []
@@ -36,7 +37,8 @@ def names_to_options(f):
 
     return inner
 
-def options_to_names(f):
+
+def _options_to_names(f):
     ''' Convert any :class:`Option`s to names. '''
 
     @wraps(f)
@@ -53,7 +55,7 @@ def options_to_names(f):
     return inner
 
 
-def verify_args_exist(f):
+def _verify_args_exist(f):
     @wraps(f)
     def inner(*args, **kwargs):
         def raise_error(name):
@@ -69,7 +71,7 @@ def verify_args_exist(f):
     return inner
 
 
-def localize_all(f):
+def _localize_all(f):
     @wraps(f)
     def inner(*args, **kwargs):
         args = list(args)
@@ -166,11 +168,49 @@ class FailedConditionError(ArgumentError):
     pass
 
 
+class MissingValueError(ArgumentError):
+    ''' Argument flag specified without value. '''
+    pass
+
+
 class InvalidEnumValueError(ArgumentError):
     ''' Enum value provided not allowed. '''
     pass
 
 # ---------- end exceptions ---------- #
+
+
+class Condition(object):
+    def __init__(self):
+        pass
+
+    def _is_satisfied(self, parsed):
+        raise NotImplementedError
+
+
+class NumericalCondition(Condition):
+    def __init__(self, call, *args):
+        self._call = call
+        self._args = args
+
+    def __lt__(self, other):
+        return NumericalCondition(operator.__lt__, self._args[0], other)
+
+    def __gt__(self, other):
+        return NumericalCondition(operator.__gt__, self._args[0], other)
+
+    def __eq__(self, other):
+        return NumericalCondition(operator.__eq__, self._args[0], other)
+
+    def _is_satisfied(self, parsed):
+        newargs = []
+        for arg in self._args:
+            if isinstance(arg, Option):
+                newargs.append(parsed.get(arg.argname))
+            else:
+                newargs.append(arg)
+
+        return self._call(*newargs)
 
 
 class Option(object):
@@ -256,8 +296,20 @@ class Option(object):
         self._parser._set_multiple(self.argname)
         return self
 
-    def _is_provided(self, parsed):
+    def _is_satisfied(self, parsed):
         return self.argname in parsed
+
+    def __lt__(self, other):
+        return NumericalCondition(operator.__lt__, self, other)
+
+    def __gt__(self, other):
+        return NumericalCondition(operator.__gt__, self, other)
+
+    def __eq__(self, other):
+        return NumericalCondition(operator.__eq__, self, other)
+
+    def __ne__(self, other):
+        return NumericalCondition(operator.__ne__, self, other)
 
 
 # ---------- Argument readers ---------- #
@@ -330,7 +382,7 @@ class _SingleWordReader(_ArgumentReader):
 
     def get(self):
         if self.value is None:
-            raise ValueError('no value passed')
+            raise MissingValueError
         return self.value
 
 
@@ -351,7 +403,7 @@ class Group(Option):
         self._default = name
         return self
 
-    def _is_provided(self, parsed):
+    def _is_satisfied(self, parsed):
         for item in self._names:
             if item in parsed:
                 return True
@@ -409,7 +461,7 @@ class Parser(object):
         self._to_underscore = True
         return self
 
-    def single_flag(self, flag):
+    def set_single_flag(self, flag):
         ''' Set the single flag prefix. This appears before short arguments
         (e.g., -a). '''
 
@@ -418,7 +470,7 @@ class Parser(object):
         self._single_flag = flag
         return self
 
-    def double_flag(self, flag):
+    def set_double_flag(self, flag):
         ''' Set the double flag prefix. This appears before long arguments
         (e.g., --arg). '''
 
@@ -452,7 +504,7 @@ class Parser(object):
         else:
             return self._double_flag + name
 
-    @options_to_names
+    @_options_to_names
     def require_all_if_any(self, *names):
         ''' All arguments require each other; i.e., if any is specified, then
         all must be specified. '''
@@ -468,7 +520,7 @@ class Parser(object):
     def at_least_one(self, *names):
         return self._require_at_least_one(*names)
 
-    @options_to_names
+    @_options_to_names
     def _require_at_least_one(self, *names):
         ''' At least one of the arguments is required. '''
 
@@ -484,12 +536,12 @@ class Parser(object):
         self._unspecified_default = name
 
     @localize
-    @verify_args_exist
-    @names_to_options
+    @_verify_args_exist
+    @_names_to_options
     def _set_required(self, arg, replacements=None):
         newreplacements = []
         for item in replacements or []:
-            if not isinstance(item, Option):
+            if not isinstance(item, (Option, Condition)):
                 item = self._options[item]
             newreplacements.append(item)
 
@@ -554,7 +606,7 @@ class Parser(object):
             if not (1 <= len(toks) <= 3):
                 raise_error()
             try:
-                return xrange(*(int(y) for y in toks))
+                return xrange(*[int(y) for y in toks])
             except ValueError:
                 raise_error()
 
@@ -739,10 +791,24 @@ class Parser(object):
     def _assign(self):
         parsed = {}
         for key, values in self._preparsed.iteritems():
-            if key not in self._multiple:
-                parsed[key] = values[0].get()
-            else:
-                parsed[key] = [v.get() for v in values]
+            try:
+                if key not in self._multiple:
+                    value = values[0].get()
+                else:
+                    value = [v.get() for v in values]
+
+                cast = self._casts.get(key)
+                if cast:
+                    try:
+                        value = cast(value)
+                    except FormatError:
+                        raise
+                    except ValueError:
+                        raise FormatError('Cannot cast %s to %s', value, cast)
+
+                parsed[key] = value
+            except MissingValueError:
+                raise MissingValueError('%s specified but missing given value' % key)
 
         # check conditions
         for arg in parsed.iterkeys():
@@ -752,14 +818,14 @@ class Parser(object):
 
         for arg, replacements in self._required.iteritems():
             missing = []
-            if not arg._is_provided(parsed):
+            if not arg._is_satisfied(parsed):
                 for v in replacements:
                     if isinstance(v, Group):
                         missing += v._names
-                    else:
+                    elif not isinstance(v, Condition):
                         missing.append(v)
 
-                    if v._is_provided(parsed):
+                    if v._is_satisfied(parsed):
                         break
                 else:
                     if missing:
@@ -768,16 +834,16 @@ class Parser(object):
                         raise MissingRequiredArgumentError(arg)
 
         for arg, deps in self._requires.iteritems():
-            if arg._is_provided(parsed):
+            if arg._is_satisfied(parsed):
                 for v in deps:
-                    if not v._is_provided(parsed):
+                    if not v._is_satisfied(parsed):
                         raise DependencyError(v)
 
         for arg, conflicts in self._conflicts.iteritems():
-            if arg._is_provided(parsed):
+            if arg._is_satisfied(parsed):
                 for conflict in conflicts:
-                    if conflict._is_provided(parsed):
-                        raise ConflictError(arg, conflict)
+                    if conflict._is_satisfied(parsed):
+                        raise ConflictError(arg.argname, conflict.argname)
 
 
 #                else: raise MissingRequiredArgumentError('No value passed for
@@ -792,7 +858,7 @@ class Parser(object):
             else:
                 self._set_final(key, value.default())
 
-    @options_to_names
+    @_options_to_names
     def _set_one_required(self, *names):
         self.mutually_exclude(*names)
         self._require_at_least_one(*names)
@@ -801,16 +867,16 @@ class Parser(object):
         self._set_one_required(*names)
         return Group(self, *names)
 
-    @options_to_names
+    @_options_to_names
     def all_require(self, required, *names):
         [self._set_requires(name, required) for name in names]
 
-    @options_to_names
+    @_options_to_names
     def mutually_require(self, *names):
         list(starmap(self._set_requires, permutations(names, 2)))
         return Group(self, *names)
 
-    @options_to_names
+    @_options_to_names
     def mutually_exclude(self, *names):
         list(starmap(self._set_conflicts, permutations(names, 2)))
         return Group(self, *names)
@@ -861,47 +927,33 @@ class Parser(object):
 
     def _set_final(self, key, value):
         if key not in self._store:
-            cast = self._casts.get(key, None)
-            if cast and value is not None:
-                if cast == Config:
-                    Config(value, self._store, overwrite=False)
-                else:
-                    try:
-                        value = cast(value)
-                    except FormatError:
-                        raise
-                    except ArgumentError as e:
-                        raise e
-                    except ValueError:
-                        raise FormatError('Cannot cast %s to %s', value, cast)
-
             self._store[key] = value
 
     @localize
-    @options_to_names
+    @_options_to_names
     def _set_multiple(self, name):
         self._multiple.add(name)
 
     @localize
-    @options_to_names
+    @_options_to_names
     def _set_default(self, name, value):
         self._defaults[name] = value
 
-    @localize_all
-    @verify_args_exist
-    @names_to_options
+    @_localize_all
+    @_verify_args_exist
+    @_names_to_options
     def _set_requires(self, a, b):
         self._requires.setdefault(a, []).append(b)
 
-    @localize_all
-    @verify_args_exist
-    @options_to_names
+    @_localize_all
+    @_verify_args_exist
+    @_options_to_names
     def set_requires_n_of(self, a, n, *others):
         self.require_n[a] = (n, others)
 
-    @localize_all
-    @verify_args_exist
-    @names_to_options
+    @_localize_all
+    @_verify_args_exist
+    @_names_to_options
     def _set_conflicts(self, a, b):
         self._conflicts.setdefault(a, []).append(b)
 
