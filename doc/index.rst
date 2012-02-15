@@ -9,8 +9,8 @@ Welcome to blargs's documentation!
 blargs provides easy command line parsing, as an alternative to argparse and
 optparse from Python's standard library. The main distinctions are:
 
-  * Support for arbitrarily complex dependency relationships. For example, argument A might require arguments B and C, while conflicting with D.
   * Cleaner, more minimal, and possibly more `pythonic` syntax.
+  * Support for arbitrarily complex dependency relationships. For example, argument A might require arguments B and C, while conflicting with D.
 
 Installation
 ------------
@@ -32,6 +32,9 @@ The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
 ...    p.int('arg1')
 ...    p.str('arg2')
 ...    p.flag('arg3')
+...
+>>> print 'Out of with statement; sys.argv is now parsed!'
+>>> print arg1, arg2, arg3
 
 The user can now specify the following command lines:
 
@@ -42,12 +45,12 @@ The user can now specify the following command lines:
     python test.py --arg2 'hello'    #
     python test.py --arg3            # no value is specified; implied true
 
-When the with clause loses scope, the ``sys.argv`` is parsed. In the case above,
-two arguments are specified: ``arg1``, which accepts an int; ``arg2``, which
-accepts a str, and ``arg3``, which is a flag argument (i.e., it is specified or
-ommitted).
-
-The following command lines will be rejected:
+.. When the with clause loses scope, the ``sys.argv`` is parsed. In the case above,
+.. two arguments are specified: ``arg1``, which accepts an int; ``arg2``, which
+.. accepts a str, and ``arg3``, which is a flag argument (i.e., it is specified or
+.. ommitted).
+..
+.. The following command lines will be rejected:
 
 ::
 
