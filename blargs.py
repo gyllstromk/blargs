@@ -104,7 +104,7 @@ class MissingRequiredArgumentError(ArgumentError):
 
     def __init__(self, arg):
         super(MissingRequiredArgumentError, self).__init__('No value passed for'
-                + '%s' % arg)
+                + ' %s' % arg)
 
 
 class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
@@ -515,12 +515,17 @@ class Parser(object):
                 raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
                         + ' N+i') % x)
 
+            splitter = None
             for char in (' :-'):
                 if char in x:
                     splitter = char
                     break
 
-            toks = x.split(splitter)
+            if splitter:
+                toks = x.split(splitter)
+            else:
+                toks = [x]
+
             if not (1 <= len(toks) <= 3):
                 raise_error()
             try:
@@ -681,7 +686,7 @@ class Parser(object):
     def _find_requirements(self):
         for key, values in self._preparsed.iteritems():
             for r in self._requires.get(key, []):
-                if self._localize(r) not in self._preparsed:
+                if self._localize(r) not in self._preparsed and not self._localize(r) in self._defaults:
                     raise DependencyError('%s requires %s' %
                             (self._to_flag(key), self._to_flag(r)))
 
