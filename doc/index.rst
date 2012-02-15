@@ -15,11 +15,18 @@ optparse from Python's standard library. The main distinctions are:
 Installation
 ------------
 
-Pip is your friend here:
+By Pip:
 
 ::
 
     pip install blargs
+
+Or by git:
+
+::
+
+    git clone https://bitbucket.org/gyllstromk/blargs.git
+
 
 .. currentmodule:: blargs
 
