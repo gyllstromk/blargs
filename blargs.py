@@ -636,6 +636,9 @@ class Parser(object):
         self._set_reader(name, _MultiWordArgumentReader)
         return result
 
+    def if_(self):
+        pass
+
     def bool(self, name):
         ''' Alias of :func:`flag`. '''
 

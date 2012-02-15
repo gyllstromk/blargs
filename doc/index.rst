@@ -43,6 +43,27 @@ The following command lines will be rejected:
   python test.py --arg1 a  # 'a' does not parse to int
   python test.py --arg3 a  # 'arg3' is a flag and does not accept a value
 
+
+Examples
+========
+
+
+>>> with Parser(locals()) as p:
+...    arg1 = p.int('arg1')                  # declares int argument named
+...                                          # 'arg1'
+...
+...    p.float('arg2').requires(args1 < 20)  # float argument 'arg2'; if
+...                                          # specified, args1 value must be <
+...                                          # 20
+...
+...    p.float('arg3').unless(args1 > 10)    # float argument 'arg2'; if
+...                                          # specified, args1 value must be >
+...                                          # 10
+...
+...    p.float('arg4').requires(args1, p['arg2'])  # float argument 'arg2'; if
+...                                     specified, args1 value must be < 20
+
+
 Attributes
 ==========
 
