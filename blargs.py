@@ -213,16 +213,6 @@ class InvalidEnumValueError(ArgumentError):
 
 class Condition(object):
     def __init__(self):
-        pass
-
-    def _is_satisfied(self, parsed):
-        raise NotImplementedError
-
-
-class NumericalCondition(Condition):
-    def __init__(self, call, args):
-        self._call = call
-        self._args = args
         self._other_conditions = []
         self._and = True
         self._neg = False
@@ -230,6 +220,9 @@ class NumericalCondition(Condition):
     def __neg__(self):
         self._neg = True
         return self
+
+    def _inner_satisfied(self, parsed):
+        raise NotImplementedError
 
     def and_(self, condition):
         if not self._and:
@@ -245,13 +238,6 @@ class NumericalCondition(Condition):
 
     def _is_satisfied(self, parsed):
         def _inner():
-            newargs = []
-            for arg in self._args:
-                if isinstance(arg, Option):
-                    newargs.append(parsed.get(arg.argname))
-                else:
-                    newargs.append(arg)
-
             for n in self._other_conditions:
                 if not n._is_satisfied(parsed):
                     if self._and:
@@ -259,7 +245,7 @@ class NumericalCondition(Condition):
                 elif not self._and:
                     return True
 
-            return self._call(*newargs)
+            return self._inner_satisfied(parsed)
 
         result = _inner()
         if self._neg:
@@ -267,11 +253,30 @@ class NumericalCondition(Condition):
         return result
 
 
-class Option(object):
+class CallableCondition(Condition):
+    def __init__(self, call, args):
+        super(CallableCondition, self).__init__()
+        self._call = call
+        self._args = args
+
+    def _inner_satisfied(self, parsed):
+        newargs = []
+        for arg in self._args:
+            if isinstance(arg, Option):
+                newargs.append(parsed.get(arg.argname))
+            else:
+                newargs.append(arg)
+
+        return self._call(*newargs)
+
+
+class Option(Condition):
     def __init__(self, argname, parser):
         ''' Do not construct directly, as it will not be tethered to a
         :class:`Parser` object and thereby will not be handled in argument
         parsing. '''
+
+        super(Option, self).__init__()
 
         self.argname = argname
         self._parser = parser
@@ -354,11 +359,11 @@ class Option(object):
         self._parser._set_multiple(self.argname)
         return self
 
-    def _is_satisfied(self, parsed):
+    def _inner_satisfied(self, parsed):
         return self.argname in parsed
 
     def _make_condition(self, func, other):
-        return NumericalCondition(func, (self, other))
+        return CallableCondition(func, (self, other))
 
     def __lt__(self, other):
         return self._make_condition(operator.__lt__, other)
@@ -514,6 +519,14 @@ class Parser(object):
         if default_help:
             self.flag('help').shorthand('h')
 
+    def _init_user_set(self, store=None):
+        self._preparsed = {}
+        if store is None:
+            store = {}
+        self._store = store
+        self._namemaps = {}
+        self._rnamemaps = {}
+
     def help_prefix(self, message):
         self._help_prefix = message
         return self
@@ -544,14 +557,6 @@ class Parser(object):
         self._double_prefix = flag
         return self
 
-    def _init_user_set(self, store=None):
-        self._preparsed = {}
-        if store is None:
-            store = {}
-        self._store = store
-        self._namemaps = {}
-        self._rnamemaps = {}
-
     @classmethod
     def with_locals(cls):
         ''' Create :class:`Parser` using locals() dict. '''
@@ -568,49 +573,7 @@ class Parser(object):
         else:
             return self._double_prefix + name
 
-    @_options_to_names
-    def require_all_if_any(self, *names):
-        ''' All arguments require each other; i.e., if any is specified, then
-        all must be specified. '''
-
-        s = set(names)
-        for v in s:
-            for vi in s:
-                if v == vi:
-                    continue
-
-                self._set_requires(v, vi)
-
-    def at_least_one(self, *args):
-        ''' Require at least one of ``args``. '''
-        return self._require_at_least_one(*args)
-
-    @_options_to_names
-    def _require_at_least_one(self, *names):
-        ''' At least one of the arguments is required. '''
-
-        s = set(names)
-        for v in s:
-            self._set_required(v, s - set([v]))
-
-    @localize
-    def _set_unspecified_default(self, name):
-        if self._unspecified_default is not None:
-            raise ValueError('Trying to specify multiple unspecified defaults')
-
-        self._unspecified_default = name
-
-    @localize
-    @_verify_args_exist
-    @_names_to_options
-    def _set_required(self, arg, replacements=None):
-        newreplacements = []
-        for item in replacements or []:
-            if not isinstance(item, (Option, Condition)):
-                item = self._options[item]
-            newreplacements.append(item)
-
-        self._required.setdefault(arg, []).extend(newreplacements)
+# --- types --- #
 
     def config(self, name):
         return self._add_option(name).cast(Config)
@@ -681,13 +644,6 @@ class Parser(object):
         self._set_reader(name, _MultiWordArgumentReader)
         return result
 
-    def __getitem__(self, name):
-        return Option(name, self)
-
-    @localize
-    def _set_reader(self, name, option):
-        self._readers[name] = option
-
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
             >>> with Parser() as p:
@@ -715,6 +671,69 @@ class Parser(object):
         result = self._add_option(name)
         self._set_reader(name, _FlagArgumentReader)
         return result
+
+# --- aggregate calls --- #
+
+    def at_least_one(self, *args):
+        ''' Require at least one of ``args``. '''
+        return self._require_at_least_one(*args)
+
+    def require_one(self, *args):
+        ''' Require only and only one of ``args``. '''
+
+        self._set_one_required(*args)
+        return Group(self, *args)
+
+    def all_if_any(self, *args):
+        ''' If *any* of ``args`` is specified, then all of ``args`` must be
+        specified. '''
+
+        list(starmap(self._set_requires, permutations(args, 2)))
+        return Group(self, *args)
+
+    @_options_to_names
+    def only_one_if_any(self, *args):
+        ''' If *any* of ``args`` is specified, then none of the remaining
+        ``args`` may be specified.'''
+
+        list(starmap(self._set_conflicts, permutations(args, 2)))
+        return Group(self, *args)
+
+    def __getitem__(self, name):
+        return Option(name, self)
+
+# --- private --- #
+
+    @_options_to_names
+    def _require_at_least_one(self, *names):
+        ''' At least one of the arguments is required. '''
+
+        s = set(names)
+        for v in s:
+            self._set_required(v, s - set([v]))
+
+    @localize
+    def _set_unspecified_default(self, name):
+        if self._unspecified_default is not None:
+            raise ValueError('Trying to specify multiple unspecified defaults')
+
+        self._unspecified_default = name
+
+    @localize
+    @_verify_args_exist
+    @_names_to_options
+    def _set_required(self, arg, replacements=None):
+        newreplacements = []
+        for item in replacements or []:
+            if not isinstance(item, (Option, Condition)):
+                item = self._options[item]
+            newreplacements.append(item)
+
+        self._required.setdefault(arg, []).extend(newreplacements)
+
+    @localize
+    def _set_reader(self, name, option):
+        self._readers[name] = option
 
     def _add_shorthand(self, source, alias):
         if source not in self._readers:
@@ -848,7 +867,8 @@ class Parser(object):
 
                 parsed[key] = value
             except MissingValueError:
-                raise MissingValueError('%s specified but missing given value' % key)
+                raise MissingValueError('%s specified but missing given value'
+                        % key)
 
         # check conditions
         for arg in parsed.iterkeys():
@@ -885,10 +905,6 @@ class Parser(object):
                     if conflict._is_satisfied(parsed):
                         raise ConflictError(arg.argname, conflict.argname)
 
-
-#                else: raise MissingRequiredArgumentError('No value passed for
-#                %s' % key)
-
         for key, value in parsed.iteritems():
             self._set_final(key, value)
 
@@ -900,34 +916,8 @@ class Parser(object):
 
     @_options_to_names
     def _set_one_required(self, *names):
-        self.mutually_exclude(*names)
+        self.only_one_if_any(*names)
         self._require_at_least_one(*names)
-
-    def require_one(self, *args):
-        ''' Require and only one of ``args``. '''
-
-        self._set_one_required(*args)
-        return Group(self, *args)
-
-    @_options_to_names
-    def all_require(self, required, *names):
-        [self._set_requires(name, required) for name in names]
-
-    @_options_to_names
-    def mutually_require(self, *args):
-        ''' If *any* of ``args`` is specified, then all of ``args`` must be
-        specified. '''
-
-        list(starmap(self._set_requires, permutations(args, 2)))
-        return Group(self, *args)
-
-    @_options_to_names
-    def mutually_exclude(self, *args):
-        ''' If *any* of ``args`` is specified, then none of the remaining
-        ``args`` may be specified.'''
-
-        list(starmap(self._set_conflicts, permutations(args, 2)))
-        return Group(self, *args)
 
     def _get_args(self, args):
         if args is None:

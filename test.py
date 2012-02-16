@@ -32,7 +32,7 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
-    def test_conditions(self):
+    def test_numeric_conditions(self):
         p = Parser()
         a = p.float('a')
         p.int('b').unless(a < 20)
@@ -73,6 +73,12 @@ class TestCase(unittest.TestCase):
         self.assertRaises(ArgumentError, p._process_command_line, ['--a', '8'])
         p._process_command_line(['--a', '11'])
 
+    def test_conditions(self):
+        p = Parser()
+        a = p.float('a')
+        b = p.float('b')
+        c = p.float('c').requires(a.or_(b))
+
     def test_compound(self):
         p = Parser()
         a = p.float('a')
@@ -109,11 +115,11 @@ class TestCase(unittest.TestCase):
     def test_groups(self):
         p = Parser()
         p.require_one(
-            p.mutually_exclude(
+            p.only_one_if_any(
                 p.flag('a'),
                 p.flag('b')
             ),
-            p.mutually_exclude(
+            p.only_one_if_any(
                 p.flag('c'),
                 p.flag('d')
             )
@@ -127,11 +133,11 @@ class TestCase(unittest.TestCase):
                 self.assertRaises(ConflictError, p._process_command_line, ['--%s' % char, '--%s' % other])
 
         p = Parser()
-        p.mutually_exclude(
+        p.only_one_if_any(
             p.flag('a'),
             p.flag('b')
         ).requires(
-            p.mutually_exclude(
+            p.only_one_if_any(
                 p.flag('c'),
                 p.flag('d')
             )
@@ -402,7 +408,7 @@ class TestCase(unittest.TestCase):
         p.str('z')
         x = p.str('x').unless('y', 'z')
         self.assertTrue(x != None)
-        self.assertRaises(ManyAllowedNoneSpecifiedArgumentError,
+        self.assertRaises(ArgumentError,
                 p._process_command_line, [])
         p._process_command_line(['--y', 'a'])
         p._process_command_line(['--x', 'a'])
@@ -486,7 +492,7 @@ class TestCase(unittest.TestCase):
             p.flag('y')
             p.flag('z')
 
-            p.mutually_exclude(*'xyz')
+            p.only_one_if_any(*'xyz')
             return p
 
         self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
@@ -501,7 +507,7 @@ class TestCase(unittest.TestCase):
     def test_mutually_dependent(self):
         def create():
             p = Parser()
-            p.mutually_require(
+            p.all_if_any(
                 p.flag('x'),
                 p.flag('y'),
                 p.flag('z')
@@ -553,7 +559,7 @@ class TestCase(unittest.TestCase):
         create()._process_command_line(['-y', '1'])
         create()._process_command_line(['-z', '1'])
         create()._process_command_line(['-x', '1', '-y', '1'])
-        self.assertRaises(ManyAllowedNoneSpecifiedArgumentError, create()._process_command_line, [])
+        self.assertRaises(ArgumentError, create()._process_command_line, [])
 
     def x_test_requires_n(self):
         p = Parser()
@@ -588,7 +594,7 @@ class TestCase(unittest.TestCase):
         create()._process_command_line(['-z', '1'])
 
         self.assertRaises(ConflictError, create()._process_command_line, ['-x', '1', '-y', '1'])
-        self.assertRaises(ManyAllowedNoneSpecifiedArgumentError, create()._process_command_line, [])
+        self.assertRaises(ArgumentError, create()._process_command_line, [])
 
         p = Parser()
         p.flag('a')
