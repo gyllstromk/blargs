@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='blargs',
-      version='0.2.2b',
+      version='0.2.4b',
       py_modules=['blargs'],
       description='Blargs command line parser',
       author='Karl Gyllstrom',
