@@ -10,7 +10,7 @@ blargs provides easy command line parsing, as an alternative to argparse and
 optparse from Python's standard library. The main distinctions are:
 
   * Cleaner, more minimal, and possibly more `pythonic` syntax.
-  * Support for arbitrarily complex dependency relationships. For example, argument A might require arguments B and C, while conflicting with D.
+  * Support for arbitrarily complex dependency relationships. For example, argument A might require arguments B and C, while conflicting with D; or requiring argument E in the case that A is less than 10 or B is equal to the string 'wonderful!'.
 
 Installation
 ------------
@@ -26,9 +26,6 @@ Or by git:
 ::
 
     git clone https://bitbucket.org/gyllstromk/blargs.git
-
-
-.. currentmodule:: blargs
 
 Parser
 ------
@@ -361,6 +358,8 @@ Complex Dependencies
 
 Code
 ====
+
+.. currentmodule:: blargs
 
 ..	autoclass:: Parser
   :members:

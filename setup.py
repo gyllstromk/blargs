@@ -1,7 +1,9 @@
+from version import getversion
+
 from distutils.core import setup
 
 setup(name='blargs',
-      version='0.2.4b',
+      version=getversion(True),
       py_modules=['blargs'],
       description='Blargs command line parser',
       author='Karl Gyllstrom',
