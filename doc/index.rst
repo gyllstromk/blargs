@@ -47,8 +47,8 @@ The user can now specify the following command lines:
 
 ::
 
-    python test.py --arg1=3          # either '=' or
-    python test.py --arg1 3          #   space is allowed
+    python test.py --arg1=3          # either '=' ...
+    python test.py --arg1 3          # ...or space is allowed
     python test.py --arg2 'hello'    #
     python test.py --arg3            # no value is specified; implied true
 
@@ -57,10 +57,12 @@ The user can now specify the following command lines:
 .. accepts a str, and ``arg3``, which is a flag argument (i.e., it is specified or
 .. ommitted).
 ..
-.. The following command lines will be rejected:
+
+The following command lines will be rejected:
 
 ::
 
+  python test.py --arg1    # no value specified for 'arg1'
   python test.py --arg1 a  # 'a' does not parse to int
   python test.py --arg3 a  # 'arg3' is a flag and does not accept a value
 
@@ -78,8 +80,10 @@ Types
 ...    p.multiword('multi_arg') # --multi_arg hello world
 ...    p.enum('enum_arg')       # 
 
-Examples
-========
+It is possible to specify new types via :class:`Option`:`cast`
+
+Howto
+=====
 
 Require an argument
 -------------------
@@ -187,28 +191,65 @@ If we want an argument to be parsed even without a label:
 ...    p.str('arg1').unspecified_default()
 ...    p.str('arg2')
 
-Now, an argument without a label will be saved to ``arg1'':
+Now, an argument without a label will be saved to ``arg1``:
 
 ::
 
   python test.py hello  # arg1 = 'hello'
   python test.py --arg2 world hello   # arg1 = 'hello', arg2 = 'world'
 
+Note that to avoid ambiguity, only one argument type may be an
+``unspecified_default``.
+
 Conditions
-----------
+==========
+
+if
+--
+
+Argument must be specified if ``condition``:
 
 >>> with Parser(locals()) as p:
 ...    arg1 = p.int('arg1')
-...    p.float('arg2').requires(args1 < 20)  # float argument 'arg2'; if
-...                                          # specified, arg1 value must be <
-...                                          # 20
+...    p.float('arg2').if_(arg1 > 10)       # 'arg2' must be specified if
+...                                         # 'arg1' > 10
+
+unless
+------
+
+Argument must be specified ``unless`` ``condition``.
+
+>>> with Parser(locals()) as p:
+...    arg1 = p.int('arg1')
+...    p.float('arg2').unless(arg1 > 10)    # 'arg2' must be specified if
+...                                         # 'arg1' <= 10
+
+requires
+--------
+
+If argument is specified, then ``condition`` must be true;
+
+>>> with Parser(locals()) as p:
+...    arg1 = p.int('arg1')
+...    p.float('arg2').requires(arg1 < 20)  # if 'arg2' specified, 'arg1' must
+...                                         # be < 20
+
+and/or
+------
+
+Build conditions via logical operators ``and_`` and ``or_``:
+
+>>> with Parser(locals()) as p:
+...    arg1 = p.int('arg1')
+...    p.float('arg2').unless((0 < arg1).and_(arg1 < 10))  # 'arg2' is required
+...                                                        # unless 0 < arg1 < 10
 ...
-...    p.float('arg3').unless(args1 > 10)    # float argument 'arg2'; if
-...                                          # specified, arg1 value must be
-...                                          # <= 10
+...    p.float('arg3').if_((arg1 < 0).or_(arg1 > 10))      # 'arg3' is required
+...                                                        # if 'arg1' < 0 or
+...                                                        # 'arg1' > 10
 
 Complex Dependencies
---------------------
+====================
 
 >>> with Parser(locals()) as p:
 ...    p.at_least_one(            # at least one of
@@ -218,6 +259,10 @@ Complex Dependencies
 ...      ),                       # both be specified
 ...      p.str('arg3'),
 ...    )
+
+>>> with Parser(locals()) as p:
+...    arg1 = p.int('arg1')
+...    arg2 = p.int('arg2').if_(
 
 .. A number of attributes can be added to arguments:
 .. 

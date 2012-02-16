@@ -37,8 +37,38 @@ class TestCase(unittest.TestCase):
 
         p = Parser()
         a = p.float('a')
-        b = p.float('b').unless(1 < a < 10)
-        p._process_command_line(['--a', '0'])
+        b = p.float('b').requires(a < 10)
+        self.assertRaises(DependencyError, p._process_command_line, ['--b', '3.9', '--a', '11'])
+
+        p = Parser()
+        a = p.float('a')
+        b = p.float('b').if_(a < 10)
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '8'])
+        p._process_command_line(['--a', '11'])
+
+    def test_compound(self):
+        p = Parser()
+        a = p.float('a')
+        b = p.float('b').unless((a > 0).and_(a < 10))
+        self.assertRaises(ValueError, p._process_command_line, ['--a', '0'])
+        self.assertRaises(ValueError, p._process_command_line, ['--a', '10'])
+        p._process_command_line(['--a', '5'])
+
+        p = Parser()
+        a = p.float('a')
+        c = p.float('b').unless((a < 0).or_(a > 10))
+        p._process_command_line(['--a', '11'])
+        p._process_command_line(['--a', '-1'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '0'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '10'])
+
+        p = Parser()
+        a = p.float('a')
+        c = p.float('b').if_(a > 0).unless((a > 10).and_(a < 20))
+        p._process_command_line(['--a', '11'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '1'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '5'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '20'])
 
     def test_redundant(self):
         try:
@@ -107,16 +137,16 @@ class TestCase(unittest.TestCase):
         except TypeError:
             self.fail()
 
-    def yy_test_enum(self):
-        p = Parser()
-        default = '1'
-        p.enum('a', ['1', '2', 'b']).default(default)
-        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
-        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
-        for arg in ('1', '2', 'b'):
-            self.assertEquals(p._process_command_line(['--a', arg])['a'], arg)
-
-        self.assertEquals(p._process_command_line([])['a'], default)
+#    def test_enum(self):
+#        p = Parser()
+#        default = '1'
+#        p.enum('a', ['1', '2', 'b']).default(default)
+#        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
+#        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
+#        for arg in ('1', '2', 'b'):
+#            self.assertEquals(p._process_command_line(['--a', arg])['a'], arg)
+#
+#        self.assertEquals(p._process_command_line([])['a'], default)
 
     def test_condition(self):
         p = Parser()
@@ -149,7 +179,7 @@ class TestCase(unittest.TestCase):
         vals = p._process_command_line(['--aa', 'a', 'c', 'd', '--ab', 'b'])
         self.assertEquals(vals['aa'], 'a c d')
 
-        p = Parser().set_single_flag('+').set_double_flag('M')
+        p = Parser().set_single_prefix('+').set_double_prefix('M')
         p.multiword('aa')
         p.str('ab').shorthand('a')
         vals = p._process_command_line(['Maa', 'a', 'c', 'd', 'Mab', 'b'])
@@ -157,7 +187,7 @@ class TestCase(unittest.TestCase):
         vals = p._process_command_line(['Maa', 'a', 'c', 'd', '+a', 'b'])
         self.assertEquals(vals['aa'], 'a c d')
 
-        self.assertRaises(ValueError, Parser().set_single_flag('++').set_double_flag, '+')
+        self.assertRaises(ValueError, Parser().set_single_prefix('++').set_double_prefix, '+')
 
     def x_test_with_files(self):
         d = TemporaryDirectory()
@@ -221,7 +251,7 @@ class TestCase(unittest.TestCase):
         v = p._process_command_line(['-a', '0', '9', '3'])
         self.assertTrue(xrange_equals(v['a'], xrange(0, 9, 3)))
 
-        p.set_single_flag('+')
+        p.set_single_prefix('+')
         v = p._process_command_line(['+a', '0', '-1', '3'])
         self.assertTrue(xrange_equals(v['a'], xrange(0, -1, 3)))
 
@@ -258,6 +288,11 @@ class TestCase(unittest.TestCase):
         p.str('x').unspecified_default().conflicts(p.str('y'))
         self.assertRaises(ConflictError, p._process_command_line,
             ['unspecified_default', '-y', 'a'])
+
+        # multiple
+        p = Parser()
+        p.str('x').unspecified_default()
+        self.assertRaises(ValueError, p.str('y').unspecified_default)
     
     def test_with(self):
         import sys
