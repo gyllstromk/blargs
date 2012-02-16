@@ -251,21 +251,70 @@ Build conditions via logical operators ``and_`` and ``or_``:
 ...                                                        # if 'arg1' < 0 or
 ...                                                        # 'arg1' > 10
 
+Aggregate calls
+===============
+
+Aggregate calls enable the indication of behavior for a set of arguments at once.
+
+At least one
+------------
+
+Require at least one (up to all) of the subsequent arguments:
+
+>>> with Parser(locals()) as p:
+...    p.at_least_one(
+...       p.str('arg1'),
+...       p.str('arg2'),
+...       p.str('arg3')
+...    )
+
+Mutual exclusion
+----------------
+
+Only one of the arguments can be specified:
+
+>>> with Parser(locals()) as p:
+...    p.only_one_if_any(
+...       p.str('arg1'),
+...       p.str('arg2'),
+...       p.str('arg3')
+...    )
+
+All if any
+----------
+
+If any of the arguments is be specified, all of them must be:
+
+>>> with Parser(locals()) as p:
+...    p.all_if_any(
+...       p.str('arg1'),
+...       p.str('arg2'),
+...       p.str('arg3')
+...    )
+
+Require one
+-----------
+
+One and only one of the arguments must be specified:
+
+>>> with Parser(locals()) as p:
+...    p.require_one(
+...       p.str('arg1'),
+...       p.str('arg2'),
+...       p.str('arg3')
+...    )
+
 Complex Dependencies
 ====================
 
 >>> with Parser(locals()) as p:
 ...    p.at_least_one(            # at least one of
-...      p.mutually_exclude(      # 'arg1', 'arg2', and/or 'arg3'
+...      p.only_one_if_any(       # 'arg1', 'arg2', and/or 'arg3'
 ...        p.int('arg1'),         # must be specified, but
 ...        p.flag('arg2'),        # 'arg1' and 'arg2' may not
 ...      ),                       # both be specified
 ...      p.str('arg3'),
 ...    )
-
->>> with Parser(locals()) as p:
-...    arg1 = p.int('arg1')
-...    arg2 = p.int('arg2').if_(
 
 .. A number of attributes can be added to arguments:
 .. 
