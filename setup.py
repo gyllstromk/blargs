@@ -3,7 +3,7 @@ from version import getversion
 from distutils.core import setup
 
 setup(name='blargs',
-      version=getversion(True),
+      version=getversion(),
       py_modules=['blargs'],
       description='Blargs command line parser',
       author='Karl Gyllstrom',
