@@ -157,6 +157,9 @@ Normally an argument may only be specified once by the user. This can be changed
 
 >>> with Parser(locals()) as p:
 ...    p.str('arg1').multiple()
+...
+>>> print len(arg1)  # arg1 is list
+>>> print arg1[0]
 
 To use:
 
