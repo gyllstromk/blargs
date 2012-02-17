@@ -6,6 +6,9 @@
 Welcome to blargs's documentation!
 ==================================
 
+.. image:: logo_large.png
+  :align: right
+
 blargs provides easy command line parsing, as an alternative to argparse and
 optparse from Python's standard library. The main distinctions are:
 
@@ -91,7 +94,7 @@ Types
 ...    p.multiword('multi_arg') # --multi_arg hello world
 ...    p.enum('enum_arg')       # 
 
-It is possible to specify new types via :class:`Option`:`cast`
+It is possible to specify new types via :func:`Option`:`cast`
 
 Howto
 =====
@@ -113,7 +116,7 @@ We get the following:
 ::
 
   No value passed for required_arg
-  usage: t.py [--required_arg <option>] [--help,-h]
+  usage: test.py [--required_arg <option>] [--help,-h]
 
 Shorthand/alias
 ---------------
@@ -225,8 +228,10 @@ Argument must be specified if ``condition``:
 
 >>> with Parser(locals()) as p:
 ...    arg1 = p.int('arg1')
-...    p.float('arg2').if_(arg1 > 10)       # 'arg2' must be specified if
-...                                         # 'arg1' > 10
+...    arg2 = p.float('arg2').if_(arg1 > 10) # 'arg2' must be specified if
+...                                          # 'arg1' > 10
+...    p.float('arg3').if_(arg1.or_(arg2))   # 'arg3' must be specified if
+...                                          # 'arg1' or 'arg2' is
 
 unless
 ------

@@ -529,7 +529,10 @@ class Parser(object):
         self._namemaps = {}
         self._rnamemaps = {}
 
-    def help_prefix(self, message):
+    def set_help_prefix(self, message):
+        ''' Indicate text to appear before argument list when the ``help``
+        function is triggered. '''
+
         self._help_prefix = message
         return self
 
@@ -589,6 +592,7 @@ class Parser(object):
 
     def float(self, name):
         ''' Add float argument. '''
+
         return self._add_option(name).cast(float)
 
 #    def enum(self, name, values):
@@ -651,12 +655,15 @@ class Parser(object):
 
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
+
             >>> with Parser() as p:
             ...   p.multiword('multi')
 
             Now accepts:
 
-              python test.py --multi path to something
+            ::
+
+               python test.py --multi path to something
 
         '''
 
@@ -681,6 +688,7 @@ class Parser(object):
 
     def at_least_one(self, *args):
         ''' Require at least one of ``args``. '''
+
         return self._require_at_least_one(*args)
 
     def require_one(self, *args):
@@ -846,12 +854,6 @@ class Parser(object):
             self.print_help()
             sys.exit(0)
 
-    def _check_user_specified(self):
-        for key, values in self._preparsed.iteritems():
-            if len(values) > 1 and key not in self._multiple:
-                raise MultipleSpecifiedArgumentError(('%s specified multiple'
-                        + ' times') % self._to_flag(key))
-
     def _assign(self):
         parsed = {}
         for key, values in self._preparsed.iteritems():
@@ -874,6 +876,13 @@ class Parser(object):
             except MissingValueError:
                 raise MissingValueError('%s specified but missing given value'
                         % key)
+
+        # check multiple
+
+        for key, values in self._preparsed.iteritems():
+            if len(values) > 1 and key not in self._multiple:
+                raise MultipleSpecifiedArgumentError(('%s specified multiple'
+                        + ' times') % self._to_flag(key))
 
         # check conditions
         for arg in parsed.iterkeys():
@@ -941,7 +950,6 @@ class Parser(object):
             self._read(args)
             self._help_if_necessary()
 
-            self._check_user_specified()
             self._assign()
             store = self._store
         except ArgumentError as e:

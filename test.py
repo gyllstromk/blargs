@@ -78,6 +78,19 @@ class TestCase(unittest.TestCase):
         a = p.float('a')
         b = p.float('b')
         c = p.float('c').requires(a.or_(b))
+        self.assertRaises(ArgumentError, p._process_command_line, ['--c', '9.2'])
+        p._process_command_line(['--a', '11', '--c', '9.2'])
+        p._process_command_line(['--b', '11', '--c', '9.2'])
+
+        p = Parser()
+        a = p.float('a')
+        b = p.float('b')
+        c = p.float('c').if_(a.or_(b))
+        p._process_command_line(['--c', '9.2'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '11'])
+        p._process_command_line(['--a', '11', '--c', '9.2'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--b', '11'])
+        p._process_command_line(['--b', '11', '--c', '9.2'])
 
     def test_compound(self):
         p = Parser()
