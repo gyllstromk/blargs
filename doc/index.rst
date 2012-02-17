@@ -10,7 +10,12 @@ blargs provides easy command line parsing, as an alternative to argparse and
 optparse from Python's standard library. The main distinctions are:
 
   * Cleaner, more minimal, and possibly more `pythonic` syntax.
-  * Support for arbitrarily complex dependency relationships. For example, argument A might require arguments B and C, while conflicting with D; or requiring argument E in the case that A is less than 10 or B is equal to the string 'wonderful!'.
+  * Support for arbitrarily complex dependency relationships. For example,
+    argument A might require arguments B and C, while conflicting with D; or
+    requiring argument E in the case that A is less than 10 or B is equal
+    to the string 'wonderful!'.
+
+  * Emphasis on `ease of use` over `configurability`.
 
 Installation
 ------------
@@ -26,6 +31,15 @@ Or by git:
 ::
 
     git clone https://bitbucket.org/gyllstromk/blargs.git
+
+.. One big example
+.. ===============
+
+.. >>> with Parser(locals()) as p:  # create argument parser, storing values to locals()
+.. ...    p.float('salary').shorthand('s').required()
+.. ...    p.str('nickname').default('No nickname')
+.. ...    age = p.int('age').shorthand('a').required()
+.. ...    p.str('parent_name').if_(age < 18)
 
 Parser
 ------
