@@ -20,8 +20,10 @@ optparse from Python's standard library. The main distinctions are:
 
   * Emphasis on `ease of use` over `configurability`.
 
+Note: blargs is currently still in *beta*. You can help by submitting bugs!
+
 Installation
-------------
+============
 
 By Pip:
 
@@ -35,6 +37,10 @@ Or by git:
 
     git clone https://bitbucket.org/gyllstromk/blargs.git
 
+License
+=======
+BSD
+
 .. One big example
 .. ===============
 
@@ -44,8 +50,8 @@ Or by git:
 .. ...    age = p.int('age').shorthand('a').required()
 .. ...    p.str('parent_name').if_(age < 18)
 
-Parser
-------
+Quick start
+===========
 
 The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
 
@@ -80,8 +86,8 @@ The following command lines will be rejected:
   python test.py --arg1 a  # 'a' does not parse to int
   python test.py --arg3 a  # 'arg3' is a flag and does not accept a value
 
-Types
-=====
+Specifying arguments
+====================
 
 >>> with Parser(locals()) as p:
 ...    # basic types
@@ -94,7 +100,20 @@ Types
 ...    p.multiword('multi_arg') # --multi_arg hello world
 ...    p.enum('enum_arg')       # 
 
-It is possible to specify new types via :func:`Option`:`cast`
+On occasions you may need to refer to a created argument as a variable. This can be done at creation time, or by a lookup.
+
+The following:
+
+>>> with Parser(locals()) as p:
+...     arg1 = p.str('arg1')
+
+is equivalent to:
+
+>>> with Parser(locals()) as p:
+...     p.str('arg1')
+...     arg1 = p['arg1']
+
+.. It is possible to specify new types via :func:`Option`:`cast`
 
 Howto
 =====
