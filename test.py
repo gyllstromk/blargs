@@ -36,41 +36,51 @@ class TestCase(unittest.TestCase):
         p = Parser()
         a = p.float('a')
         p.int('b').unless(a < 20)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '20'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '20'])
         p._process_command_line(['--a', '19'])
         p._process_command_line(['--a', '9'])
         p._process_command_line(['--b', '3', '--a', '29'])
 
         p.int('c').unless(10 < a)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '20'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '9'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '20'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '9'])
         p._process_command_line(['--a', '19'])
 
         d = p.int('d').unless(a == 19)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '20'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '9'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '20'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '9'])
         p._process_command_line(['--a', '19'])
 
         e = p.int('e').unless(a == d)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '19'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '19', '--d', '18'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '19'])
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line, ['--a', '19', '--d', '18'])
         p._process_command_line(['--a', '19', '--d', '19'])
 
         p.int('f').unless(e != d)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '19'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '19', '--d', '18'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '19', '--d', '19', '--e', '19'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '19'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '19', '--d', '18'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '19', '--d', '19', '--e',
+                    '19'])
+
         p._process_command_line(['--a', '19', '--d', '19', '--e', '18'])
 
         p = Parser()
         a = p.float('a')
         b = p.float('b').requires(a < 10)
-        self.assertRaises(DependencyError, p._process_command_line, ['--b', '3.9', '--a', '11'])
+        self.assertRaises(ConditionError, p._process_command_line, ['--b',
+            '3.9', '--a', '11'])
 
         p = Parser()
         a = p.float('a')
         b = p.float('b').if_(a < 10)
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '8'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '8'])
+
         p._process_command_line(['--a', '11'])
 
     def test_conditions(self):
@@ -78,7 +88,7 @@ class TestCase(unittest.TestCase):
         a = p.float('a')
         b = p.float('b')
         c = p.float('c').requires(a.or_(b))
-        self.assertRaises(ArgumentError, p._process_command_line, ['--c', '9.2'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--c', '9.2'])
         p._process_command_line(['--a', '11', '--c', '9.2'])
         p._process_command_line(['--b', '11', '--c', '9.2'])
 
@@ -87,17 +97,25 @@ class TestCase(unittest.TestCase):
         b = p.float('b')
         c = p.float('c').if_(a.or_(b))
         p._process_command_line(['--c', '9.2'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '11'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '11'])
+
         p._process_command_line(['--a', '11', '--c', '9.2'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--b', '11'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--b', '11'])
+
         p._process_command_line(['--b', '11', '--c', '9.2'])
 
     def test_compound(self):
         p = Parser()
         a = p.float('a')
         b = p.float('b').unless((a > 0).and_(a < 10))
-        self.assertRaises(ValueError, p._process_command_line, ['--a', '0'])
-        self.assertRaises(ValueError, p._process_command_line, ['--a', '10'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '0'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '10'])
+
         p._process_command_line(['--a', '5'])
 
         p = Parser()
@@ -105,16 +123,24 @@ class TestCase(unittest.TestCase):
         c = p.float('b').unless((a < 0).or_(a > 10))
         p._process_command_line(['--a', '11'])
         p._process_command_line(['--a', '-1'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '0'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '10'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '0'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '10'])
 
         p = Parser()
         a = p.float('a')
         c = p.float('b').if_(a > 0).unless((a > 10).and_(a < 20))
         p._process_command_line(['--a', '11'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '1'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '5'])
-        self.assertRaises(ArgumentError, p._process_command_line, ['--a', '20'])
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '1'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '5'])
+
+        self.assertRaises(MissingRequiredArgumentError,
+                p._process_command_line, ['--a', '20'])
 
     def test_redundant(self):
         try:

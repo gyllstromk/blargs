@@ -1,9 +1,9 @@
-#from version import getversion
+import blargs
 
 from distutils.core import setup
 
 setup(name='blargs',
-      version='0.2.10a',
+      version=blargs.__version__,
 #      version=getversion(),
       py_modules=['blargs'],
       description='Blargs command line parser',

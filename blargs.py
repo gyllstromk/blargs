@@ -149,6 +149,17 @@ class FormatError(ArgumentError):
     pass
 
 
+class ConditionError(ArgumentError):
+    ''' Condition not met. '''
+
+    def __init__(self, argname, condition):
+        self.argname = argname
+        self.condition = condition
+
+    def __str__(self):
+        return '%s required unless %s' % (self.argname, self.condition)
+
+
 class MissingRequiredArgumentError(ArgumentError):
     ''' Required argument not specified. '''
 
@@ -256,20 +267,34 @@ class Condition(object):
 
 
 class CallableCondition(Condition):
-    def __init__(self, call, args):
+    def __init__(self, call, main, other):
         super(CallableCondition, self).__init__()
         self._call = call
-        self._args = args
+        self._main = main
+        self._other = other
 
     def _inner_satisfied(self, parsed):
         newargs = []
-        for arg in self._args:
+        for arg in (self._main, self._other):
             if isinstance(arg, Option):
                 newargs.append(parsed.get(arg.argname))
             else:
                 newargs.append(arg)
 
         return self._call(*newargs)
+
+    def __repr__(self):
+        x = self._main.argname
+
+        names = {operator.le: '<=',
+                 operator.lt: '<',
+                 operator.gt: '>',
+                 operator.ge: '>=',
+                 operator.eq: '==',
+                 operator.ne: '!='}
+
+        x += ' ' + names[self._call] + ' ' + str(self._other)
+        return x
 
 
 class Option(Condition):
@@ -365,13 +390,19 @@ class Option(Condition):
         return self.argname in parsed
 
     def _make_condition(self, func, other):
-        return CallableCondition(func, (self, other))
+        return CallableCondition(func, self, other)
+
+    def __le__(self, other):
+        return self._make_condition(operator.__le__, other)
 
     def __lt__(self, other):
         return self._make_condition(operator.__lt__, other)
 
     def __gt__(self, other):
         return self._make_condition(operator.__gt__, other)
+
+    def __ge__(self, other):
+        return self._make_condition(operator.__ge__, other)
 
     def __eq__(self, other):
         return self._make_condition(operator.__eq__, other)
@@ -912,6 +943,8 @@ class Parser(object):
             if arg._is_satisfied(parsed):
                 for v in deps:
                     if not v._is_satisfied(parsed):
+                        if isinstance(v, CallableCondition):
+                            raise ConditionError(arg.argname, v)
                         raise DependencyError(v)
 
         for arg, conflicts in self._conflicts.iteritems():
@@ -966,15 +999,14 @@ class Parser(object):
             self.bail(e)
 
     def bail(self, e):
+        msg = []
         if isinstance(e, UnspecifiedArgumentError):
-            print 'illegal option --', e
+            msg.append('illegal option --%s' % e)
         else:
-            print e
-        print 'usage: %s' % sys.argv[0],
-        for key in self._readers:
-            print '[%s]' % self._label(key),
-
-        print
+            msg.append(str(e))
+        msg.append('usage: %s' % sys.argv[0])
+        msg.append(' '.join('[%s]' % self._label(key) for key in self._readers))
+        print('\n'.join(msg))
         sys.exit(1)
 
     def _set_final(self, key, value):
@@ -1032,9 +1064,9 @@ class Parser(object):
 
     def print_help(self):
         if self._help_prefix:
-            print self._help_prefix
+            print(self._help_prefix)
 
-        print 'Arguments:'
+        print('Arguments:')
         column_width = -1
         for key in self._readers:
             column_width = max(column_width, len(self._label(key)))
@@ -1042,7 +1074,7 @@ class Parser(object):
         fmt = '   %-' + str(column_width) + 's'
 
         for key in self._readers:
-            print fmt % self._label(key)
+            print(fmt % self._label(key))
 
 
 class IOParser(Parser):
@@ -1069,7 +1101,7 @@ class IOParser(Parser):
                 f = open_path(x, True)
 #            f.set_locked(True)
             except Exception as e:
-                print e
+                print(e)
             return f
 
         result = self._add_option(name).cast(opener)
@@ -1091,3 +1123,6 @@ class IOParser(Parser):
                 return FileWriter(x, not disable_overwrite)
 
         return self._add_option(name).cast(opener)
+
+
+__version__ = '0.2.11a'

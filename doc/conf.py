@@ -50,9 +50,8 @@ copyright = u'2011, Karl Gyllstrom'
 #
 # The short X.Y version.
 
-#from ..version import getversion
-#release = getversion()
-release = '0.2.10a'
+import blargs
+release = blargs.__version__
 #version = getversion(True)
 
 # The full version, including alpha/beta/rc tags.

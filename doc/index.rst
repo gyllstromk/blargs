@@ -100,9 +100,7 @@ Specifying arguments
 ...    p.multiword('multi_arg') # --multi_arg hello world
 ...    p.enum('enum_arg')       # 
 
-On occasions you may need to refer to a created argument as a variable. This can be done at creation time, or by a lookup.
-
-The following:
+On occasions you may need to refer to a created argument as a variable. This can be done at creation time, or by a lookup. The following:
 
 >>> with Parser(locals()) as p:
 ...     arg1 = p.str('arg1')
