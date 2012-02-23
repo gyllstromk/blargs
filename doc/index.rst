@@ -207,7 +207,7 @@ A slightly more complex example:
 ...      p.range('arg5')          # nor 'arg5' may be specified
 ...    )
 
-Allowing Duplicates
+Allowing Duplicates/Multiple
 -------------------
 
 Normally an argument may only be specified once by the user. This can be changed:
@@ -224,7 +224,9 @@ To use:
 
   python test.py --arg1 hello --arg1 world
 
-By indicating ``multiple``, the variable is stored as a ``list`` *even* if only
+Now the value of arg1 is ``['hello', 'world']``.
+
+Note: by indicating ``multiple``, the variable is stored as a ``list`` *even* if only
 one instance is specified by the user.
 
 Indicating default values
@@ -260,6 +262,14 @@ Now, an argument without a label will be saved to ``arg1``:
 
 Note that to avoid ambiguity, only one argument type may be an
 ``unspecified_default``.
+
+Creating your own types
+-----------------------
+
+It is possible to create your own types using the `cast` function, in which you specify a function that is run on the value at parse time. Let's say we want the user to be able to pass a comma-separated list of float values:
+
+>>> with Parser(locals()) as p:
+...    p.multiword('floatlist').cast(lambda x: [float(val) for val in x.split(',')])
 
 Conditions
 ==========

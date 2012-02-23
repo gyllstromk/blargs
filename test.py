@@ -547,6 +547,12 @@ usage: test.py
         p.int('x')
         vals = p._process_command_line(['--x', '1'])
 
+        p = Parser()
+        p.multiword('x').cast(lambda x: map(float, x.split()))
+        vals = p._process_command_line(['--x', '1.2 9.8 4.6'])
+        self.assertEquals(vals['x'], [1.2, 9.8000000000000007,
+            4.5999999999999996])
+
     def test_required(self):
         p = Parser()
         p.str('x').required()
