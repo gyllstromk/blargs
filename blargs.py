@@ -387,7 +387,8 @@ class Option(Condition):
         return self
 
     def _inner_satisfied(self, parsed):
-        return self.argname in parsed
+        v = parsed.get(self.argname)
+        return v is not None and v != False
 
     def _make_condition(self, func, other):
         return CallableCondition(func, self, other)
@@ -885,7 +886,7 @@ class Parser(object):
             self.print_help()
             sys.exit(0)
 
-    def _assign(self):
+    def _parseargs(self):
         parsed = {}
         for key, values in self._preparsed.iteritems():
             try:
@@ -908,19 +909,30 @@ class Parser(object):
                 raise MissingValueError('%s specified but missing given value'
                         % key)
 
-        # check multiple
+        for key, value in self._readers.iteritems():
+            if key in parsed:
+                continue
 
+            if key in self._defaults:
+                parsed[key] = self._defaults[key]
+            else:
+                parsed[key] = value.default()
+
+        return parsed
+
+    def _check_multiple(self):
         for key, values in self._preparsed.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple'
                         + ' times') % self._to_flag(key))
 
-        # check conditions
+    def _check_conditions(self, parsed):
         for arg in parsed.iterkeys():
             for cond in self._options[arg]._conditions:
                 if not cond(parsed):
                     raise FailedConditionError()
 
+    def _check_required(self, parsed):
         for arg, replacements in self._required.iteritems():
             missing = []
             if not arg._is_satisfied(parsed):
@@ -939,6 +951,7 @@ class Parser(object):
                     else:
                         raise MissingRequiredArgumentError(arg)
 
+    def _check_dependencies(self, parsed):
         for arg, deps in self._requires.iteritems():
             if arg._is_satisfied(parsed):
                 for v in deps:
@@ -947,20 +960,24 @@ class Parser(object):
                             raise ConditionError(arg.argname, v)
                         raise DependencyError(v)
 
+    def _check_conflicts(self, parsed):
         for arg, conflicts in self._conflicts.iteritems():
             if arg._is_satisfied(parsed):
                 for conflict in conflicts:
                     if conflict._is_satisfied(parsed):
                         raise ConflictError(arg.argname, conflict.argname)
 
+    def _assign(self):
+        parsed = self._parseargs()
+
+        self._check_multiple()
+        self._check_conditions(parsed)
+        self._check_required(parsed)
+        self._check_dependencies(parsed)
+        self._check_conflicts(parsed)
+
         for key, value in parsed.iteritems():
             self._set_final(key, value)
-
-        for key, value in self._readers.iteritems():
-            if key in self._defaults:
-                self._set_final(key, self._defaults[key])
-            else:
-                self._set_final(key, value.default())
 
     @_options_to_names
     def _set_one_required(self, *names):

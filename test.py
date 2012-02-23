@@ -32,6 +32,12 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
+    def test_requires_and_default(self):
+        p = Parser()
+        p.int('a').default(3)
+        p.flag('b').requires(p['a'])
+        p._process_command_line(['--b'])
+
     def test_complex1(self):
         p = Parser()
         p.require_one(
