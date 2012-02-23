@@ -504,7 +504,7 @@ class Group(Option):
 
     def _is_satisfied(self, parsed):
         for item in self._names:
-            if item in parsed:
+            if item._is_satisfied(parsed):
                 return True
         return False
 
@@ -735,7 +735,6 @@ class Parser(object):
         list(starmap(self._set_requires, permutations(args, 2)))
         return Group(self, *args)
 
-    @_options_to_names
     def only_one_if_any(self, *args):
         ''' If *any* of ``args`` is specified, then none of the remaining
         ``args`` may be specified.'''
@@ -748,13 +747,14 @@ class Parser(object):
 
 # --- private --- #
 
-    @_options_to_names
     def _require_at_least_one(self, *names):
         ''' At least one of the arguments is required. '''
 
         s = set(names)
         for v in s:
             self._set_required(v, s - set([v]))
+
+        return Group(self, *names)
 
     @localize
     def _set_unspecified_default(self, name):

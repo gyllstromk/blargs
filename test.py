@@ -32,6 +32,78 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
+    def test_complex1(self):
+        p = Parser()
+        p.require_one(
+            p.all_if_any(
+                p.int('a'),
+                p.int('b'),
+                p.int('c'),
+            ),
+            p.only_one_if_any(
+                p.int('d'),
+                p.int('e'),
+                p.int('f'),
+            ),
+        )
+
+        self.assertRaises(ArgumentError, p._process_command_line)
+        p._process_command_line(['--d', '3'])
+        p._process_command_line(['--e', '3'])
+        p._process_command_line(['--f', '3'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--d', '3', '--e', '4'])
+
+        self.assertRaises(DependencyError, p._process_command_line, ['--a', '3'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--b', '3'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--c', '3'])
+
+        p._process_command_line(['--a', '3', '--b', '4', '--c', '5'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--a', '3',
+            '--b', '4', '--c', '5', '--d', '3'])
+
+    def test_complex2(self):
+        p = Parser()
+        p.require_one(
+            p.all_if_any(
+                p.only_one_if_any(
+                    p.flag('a'),
+                    p.flag('b'),
+                ),
+                p.flag('c'),
+            ),
+            p.only_one_if_any(
+                p.all_if_any(
+                    p.flag('d'),
+                    p.flag('e'),
+                ),
+                p.flag('f'),
+            ),
+        )
+
+#        g = p.at_least_one(p.int('x'), p.int('y'))
+
+        satisfies1 = (['--a', '--c'], ['--b', '--c'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--a'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--b'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--c'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--a', '--b', '--c'])
+
+        satisfies2 = (['--d', '--e'], ['--f'])
+        self.assertRaises(ArgumentError, p._process_command_line)
+        self.assertRaises(DependencyError, p._process_command_line, ['--d'])
+        p._process_command_line(['--d', '--e'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--d',
+            '--e', '--f'])
+        p._process_command_line(['--f'])
+
+        for s1 in satisfies1:
+            p._process_command_line(s1)
+            for s2 in satisfies2:
+                self.assertRaises(ConflictError, p._process_command_line, s1 + s2)
+
+        for s2 in satisfies2:
+            p._process_command_line(s1)
+
     def test_numeric_conditions(self):
         p = Parser()
         a = p.float('a')
@@ -598,6 +670,9 @@ class TestCase(unittest.TestCase):
         create()._process_command_line(['-y', '1'])
         create()._process_command_line(['-z', '1'])
         create()._process_command_line(['-x', '1', '-y', '1'])
+        create()._process_command_line(['-x', '1', '-y', '1', 'z', '1'])
+        create()._process_command_line(['-x', '1', 'z', '1'])
+        create()._process_command_line(['-y', '1', 'z', '1'])
         self.assertRaises(ArgumentError, create()._process_command_line, [])
 
     def x_test_requires_n(self):
