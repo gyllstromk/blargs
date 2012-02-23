@@ -333,6 +333,9 @@ class Option(Condition):
         [self._parser._set_conflicts(self.argname, x) for x in others]
         return self
 
+    def __str__(self):
+        return '--%s' % self.argname
+
     def shorthand(self, alias):
         ''' Set shorthand for this argument. Shorthand arguments are 1
         character in length and are prefixed by a single '-'. For example:
@@ -508,6 +511,9 @@ class Group(Option):
             if item._is_satisfied(parsed):
                 return True
         return False
+
+    def __str__(self):
+        return ', '.join([str(name) for name in self._names])
 
 
 class Parser(object):
@@ -1142,4 +1148,4 @@ class IOParser(Parser):
         return self._add_option(name).cast(opener)
 
 
-__version__ = '0.2.12a'
+__version__ = '0.2.13a'

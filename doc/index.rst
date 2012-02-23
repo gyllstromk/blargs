@@ -100,16 +100,21 @@ Specifying arguments
 ...    p.multiword('multi_arg') # --multi_arg hello world
 ...    p.enum('enum_arg')       # 
 
-On occasions you may need to refer to a created argument as a variable. This can be done at creation time, or by a lookup. The following:
+On occasions you may need to refer to a created argument to specify
+relationships. This can be done at creation time, or by a lookup. The
+following:
 
 >>> with Parser(locals()) as p:
-...     arg1 = p.str('arg1')
+...     argument1 = p.str('arg1')
 
 is equivalent to:
 
 >>> with Parser(locals()) as p:
 ...     p.str('arg1')
-...     arg1 = p['arg1']
+...     argument1 = p['arg1']
+
+Note that ``argument1`` *does not* get the value of the parsed value; it
+represents the argument object itself.
 
 .. It is possible to specify new types via :func:`Option`:`cast`
 
