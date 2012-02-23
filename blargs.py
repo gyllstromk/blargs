@@ -1125,4 +1125,4 @@ class IOParser(Parser):
         return self._add_option(name).cast(opener)
 
 
-__version__ = '0.2.11a'
+__version__ = '0.2.12a'
