@@ -63,6 +63,8 @@ The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
 >>> print 'Out of with statement; sys.argv is now parsed!'
 >>> print arg1, arg2, arg3
 
+Note the use of ``locals`` is limited to the global scope; use a dictionary otherwise, getting argument values using the argument names as keys.
+
 The user can now specify the following command lines:
 
 ::
@@ -85,6 +87,23 @@ The following command lines will be rejected:
   python test.py --arg1    # no value specified for 'arg1'
   python test.py --arg1 a  # 'a' does not parse to int
   python test.py --arg3 a  # 'arg3' is a flag and does not accept a value
+
+
+Additionally, users can query for help:
+
+::
+
+    python test.py --help
+
+To which the program will respond:
+
+::
+
+    Arguments:
+        --arg1 <int>   
+        --arg2 <option>
+        --arg3         
+        --help/-h 
 
 Specifying arguments
 ====================
@@ -354,6 +373,30 @@ Complex Dependencies
 ...      p.str('arg3'),
 ...    )
 
+>>> with Parser(locals() as p:
+...     p.require_one(
+...         p.all_if_any(
+...             p.only_one_if_any(
+...                 p.flag('a'),
+...                 p.flag('b'),
+...             ),
+...             p.flag('c'),
+...         ),
+...         p.only_one_if_any(
+...             p.all_if_any(
+...                 p.flag('d'),
+...                 p.flag('e'),
+...             ),
+...             p.flag('f'),
+...         ),
+...     )
+
+Accepts these combinations:
+
+::
+
+  a, c; b, c; d, e; f
+
 .. A number of attributes can be added to arguments:
 .. 
 ..   * Whether or not they are required
@@ -396,6 +439,19 @@ Complex Dependencies
 .. 
 .. ``a`` will be saved as arg3's value, as it is the unspecified default. arg4 will
 .. be a list containing values [1, 5].
+
+Customizing
+===========
+
+Indicating label style
+----------------------
+
+By default, ``--`` denotes a full argument while ``-`` denotes the shorthand/alias variant. This can be replaced via :func:`set_single_prefix` and :func:`set_double_prefix`.
+
+Setting help function
+---------------------
+
+The :func:`set_help_prefix` allows you to specify the content that appears before the argument list when users trigger the ``--help`` command.
 
 Code
 ====
