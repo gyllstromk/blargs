@@ -51,7 +51,32 @@ def Config(filename, dictionary=None, overwrite=True):
     return dictionary
 
 
+def _RangeCaster(value):
+    def raise_error():
+        raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
+                + ' N+i') % value)
+
+    splitter = None
+    for char in (' :-'):
+        if char in value:
+            splitter = char
+            break
+
+    if splitter:
+        toks = value.split(splitter)
+    else:
+        toks = [value]
+
+    if not (1 <= len(toks) <= 3):
+        raise_error()
+    try:
+        return xrange(*[int(y) for y in toks])
+    except ValueError:
+        raise_error()
+
+
 # ---------- decorators ---------- #
+
 
 def _names_to_options(f):
     @wraps(f)
@@ -345,8 +370,15 @@ class Option(Condition):
     def _getreqs(self):
         return self._parser._requires.get(self, [])
 
+    def _alias(self):
+        return self._parser._source_to_alias.get(self.argname)
+
     def __str__(self):
-        return '--%s' % self.argname
+        v = '%s%s' % (self._parser._double_prefix, self.argname)
+        alias = self._alias()
+        if alias:
+            v += '/%s%s' % (self._parser._single_prefix, alias)
+        return v
 
     def shorthand(self, alias):
         ''' Set shorthand for this argument. Shorthand arguments are 1
@@ -551,7 +583,9 @@ class Parser(object):
 
         # dict of A -> args that A conflicts with
         self._conflicts = {}
+
         self._alias = {}
+        self._source_to_alias = {}
 
         # convert arg labels to understore in value dict
         self._to_underscore = False
@@ -597,7 +631,7 @@ class Parser(object):
         (e.g., -a). '''
 
         if self._double_prefix in flag:
-            raise ValueError('single_flag cannot be superset of double_flag')
+            raise ValueError('single_prefix cannot be superset of double_prefix')
         self._single_prefix = flag
         return self
 
@@ -621,14 +655,6 @@ class Parser(object):
         import inspect
         vals = inspect.currentframe().f_back.f_locals
         return Parser(vals).underscore()
-
-    def _to_flag(self, name):
-        name = self._unlocalize(name)
-
-        if len(name) == 1:
-            return self._single_prefix + name
-        else:
-            return self._double_prefix + name
 
 # --- types --- #
 
@@ -675,30 +701,8 @@ class Parser(object):
               python test.py --values 0 10 3  # -> xrange(0, 10, 3)
         '''
 
-        def caster(x):
-            def raise_error():
-                raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
-                        + ' N+i') % x)
 
-            splitter = None
-            for char in (' :-'):
-                if char in x:
-                    splitter = char
-                    break
-
-            if splitter:
-                toks = x.split(splitter)
-            else:
-                toks = [x]
-
-            if not (1 <= len(toks) <= 3):
-                raise_error()
-            try:
-                return xrange(*[int(y) for y in toks])
-            except ValueError:
-                raise_error()
-
-        result = self._add_option(name).cast(caster)
+        result = self._add_option(name).cast(_RangeCaster)
         self._set_reader(name, _MultiWordArgumentReader)
         return result
 
@@ -805,6 +809,7 @@ class Parser(object):
                 self._alias[alias]))
 
         self._alias[alias] = source
+        self._source_to_alias[source] = alias
 
     def _add_option(self, name, argument_label=None):
         name = self._localize(name)
@@ -944,7 +949,7 @@ class Parser(object):
         for key, values in preparsed.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple'
-                        + ' times') % self._to_flag(key))
+                        + ' times') % self._options[key])
 
     def _check_conditions(self, parsed):
         for arg in parsed.iterkeys():
@@ -1098,14 +1103,16 @@ class Parser(object):
         if opt._cast() is float:
             return 'float'
 
+        if opt._cast() is float:
+            return 'float'
+
+        if opt._cast() is _RangeCaster:
+            return 'range'
+
         return 'option'
 
     def _label(self, opt):
-        pkey = self._to_flag(opt.argname)
-        alias = self._alias.get(opt.argname)
-        if alias:
-            print(alias)
-            pkey += ',' + self._to_flag(k)
+        pkey = str(opt)
 
         reader = self._readers[opt.argname]
         if reader != _FlagArgumentReader:
@@ -1117,7 +1124,7 @@ class Parser(object):
         if self._help_prefix:
             print(self._help_prefix)
 
-        print('Arguments:')
+        print('Arguments: (! denotes required argument)')
         column_width = -1
         for key, value in self._options.iteritems():
             column_width = max(column_width, len(self._label(value)))
@@ -1128,7 +1135,7 @@ class Parser(object):
             msg = fmt % self._label(value)
 
             if value._isrequired():
-                msg += ' (Required)'
+                msg = '!' + msg[1:]
 
             conflicts = value._getconflicts()
             if conflicts:
