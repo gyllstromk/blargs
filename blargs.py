@@ -208,7 +208,8 @@ class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
 class UnspecifiedArgumentError(ArgumentError):
     ''' User supplies argument that isn't specified. '''
 
-    pass
+    def __init__(self, arg):
+        super(UnspecifiedArgumentError, self).__init__('illegal option %s' % arg)
 
 
 class MultipleSpecifiedArgumentError(ArgumentError):
@@ -220,7 +221,8 @@ class DependencyError(ArgumentError):
     ''' User specified an argument that requires another, unspecified argument.
     '''
 
-    pass
+    def __init__(self, arg1, arg2):
+        super(DependencyError, self).__init__('%s requires %s' % (arg1, arg2))
 
 
 class ConflictError(ArgumentError):
@@ -851,7 +853,7 @@ class Parser(object):
             return key
         return v
 
-    def _parse(self, args):
+    def _tokenize(self, args):
         new_args = []
         for arg in args:
             if '=' in arg:
@@ -865,9 +867,9 @@ class Parser(object):
         return (arg.startswith(self._single_prefix) or
                 arg.startswith(self._double_prefix))
 
-    def _read(self, args):
+    def _parse(self, args):
         argument_value = None
-        preparsed = {}
+        processed = {}
 
         for arg in args:
             if argument_value is not None:
@@ -899,21 +901,21 @@ class Parser(object):
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
-                preparsed.setdefault(argument_name,
+                processed.setdefault(argument_name,
                         []).append(argument_value)
             else:
                 self._extras.append(arg)
 
-        return preparsed
+        return processed
 
-    def _help_if_necessary(self, preparsed):
-        if 'help' in preparsed:
+    def _help_if_necessary(self, processed):
+        if 'help' in processed:
             self.print_help()
             sys.exit(0)
 
-    def _parseargs(self, preparsed):
-        parsed = {}
-        for key, values in preparsed.iteritems():
+    def _parseargs(self, parsed):
+        processed = {}
+        for key, values in parsed.iteritems():
             try:
                 if key not in self._multiple:
                     value = values[0].get()
@@ -923,13 +925,20 @@ class Parser(object):
                 cast = self._casts.get(key)
                 if cast:
                     try:
-                        value = cast(value)
+                        if isinstance(value, list):
+                            newv = []
+                            values = value
+                            for value in values:
+                                newv.append(cast(value))
+                            value = newv
+                        else:
+                            value = cast(value)
                     except FormatError:
                         raise
                     except ValueError as e:
-                        raise FormatError('Cannot cast %s to %s', value, cast)
+                        raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
 
-                parsed[key] = value
+                processed[key] = value
             except MissingValueError:
                 raise MissingValueError('%s specified but missing given value'
                         % key)
@@ -939,35 +948,35 @@ class Parser(object):
                 continue
 
             if key in self._defaults:
-                parsed[key] = self._defaults[key]
+                processed[key] = self._defaults[key]
             else:
-                parsed[key] = value.default()
+                processed[key] = value.default()
 
-        return parsed
+        return processed
 
-    def _check_multiple(self, preparsed):
-        for key, values in preparsed.iteritems():
+    def _check_multiple(self, processed):
+        for key, values in processed.iteritems():
             if len(values) > 1 and key not in self._multiple:
-                raise MultipleSpecifiedArgumentError(('%s specified multiple'
-                        + ' times') % self._options[key])
+                raise MultipleSpecifiedArgumentError(('%s specified multiple' +
+                    ' times') % self._options[key])
 
-    def _check_conditions(self, parsed):
-        for arg in parsed.iterkeys():
+    def _check_conditions(self, processed):
+        for arg in processed.iterkeys():
             for cond in self._options[arg]._conditions:
-                if not cond(parsed):
+                if not cond(processed):
                     raise FailedConditionError()
 
-    def _check_required(self, parsed):
+    def _check_required(self, processed):
         for arg, replacements in self._required.iteritems():
             missing = []
-            if not arg._is_satisfied(parsed):
+            if not arg._is_satisfied(processed):
                 for v in replacements:
                     if isinstance(v, Group):
                         missing += v._names
                     elif not isinstance(v, Condition):
                         missing.append(v)
 
-                    if v._is_satisfied(parsed):
+                    if v._is_satisfied(processed):
                         break
                 else:
                     if missing:
@@ -976,33 +985,30 @@ class Parser(object):
                     else:
                         raise MissingRequiredArgumentError(arg)
 
-    def _check_dependencies(self, parsed):
+    def _check_dependencies(self, processed):
         for arg, deps in self._requires.iteritems():
-            if arg._is_satisfied(parsed):
+            if arg._is_satisfied(processed):
                 for v in deps:
-                    if not v._is_satisfied(parsed):
+                    if not v._is_satisfied(processed):
                         if isinstance(v, CallableCondition):
                             raise ConditionError(arg.argname, v)
-                        raise DependencyError(v)
+                        raise DependencyError(arg, v)
 
-    def _check_conflicts(self, parsed):
+    def _check_conflicts(self, processed):
         for arg, conflicts in self._conflicts.iteritems():
-            if arg._is_satisfied(parsed):
+            if arg._is_satisfied(processed):
                 for conflict in conflicts:
-                    if conflict._is_satisfied(parsed):
+                    if conflict._is_satisfied(processed):
                         raise ConflictError(arg.argname, conflict.argname)
 
-    def _assign(self, preparsed):
-        parsed = self._parseargs(preparsed)
+    def _assign(self, processed):
+        self._check_conditions(processed)
+        self._check_required(processed)
+        self._check_dependencies(processed)
+        self._check_conflicts(processed)
 
-        self._check_multiple(preparsed)
-        self._check_conditions(parsed)
-        self._check_required(parsed)
-        self._check_dependencies(parsed)
-        self._check_conflicts(parsed)
-
-        for key, value in parsed.iteritems():
-            self._set_final(key, value)
+        for key, value in processed.iteritems():
+            self._store[key] = value
 
     @_options_to_names
     def _set_one_required(self, *names):
@@ -1021,18 +1027,20 @@ class Parser(object):
     def _process_command_line(self, args=None):
         try:
             args = self._get_args(args)
-            args = self._parse(args)
-            preparsed = self._read(args)
-            self._help_if_necessary(preparsed)
-
-            self._assign(preparsed)
-            store = self._store
+            tokenized = self._tokenize(args)
+            parsed = self._parse(tokenized)
+            self._help_if_necessary(parsed)
+            self._check_multiple(parsed)
+            processed = self._parseargs(parsed)
+#            print(parsed)
+#            print(processed)
+            self._assign(processed)
         except ArgumentError as e:
             raise e
 
-        self._init_user_set()  # reset
+#        self._init_user_set()  # reset
 
-        return store
+        return self._store
 
     def process_command_line(self, args=None):
         try:
@@ -1042,18 +1050,11 @@ class Parser(object):
 
     def bail(self, e):
         msg = []
-        if isinstance(e, UnspecifiedArgumentError):
-            msg.append('illegal option --%s' % e)
-        else:
-            msg.append(str(e))
+        msg.append('Error: ' + str(e))
         msg.append('usage: %s' % sys.argv[0])
         msg.append(' '.join('[%s]' % self._label(value) for value in self._options.values()))
         print('\n'.join(msg))
         sys.exit(1)
-
-    def _set_final(self, key, value):
-        if key not in self._store:
-            self._store[key] = value
 
     @localize
     @_options_to_names

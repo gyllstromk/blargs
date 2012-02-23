@@ -419,7 +419,7 @@ class TestCase(unittest.TestCase):
         p.str('x')
 
         self.assertRaises(MultipleSpecifiedArgumentError,
-                p._process_command_line, ['-x', '1', '-x', '2'])
+                p._process_command_line, ['--x', '1', '--x', '2'])
 
         p = Parser()
         x = p.str('x').multiple()
