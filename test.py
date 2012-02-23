@@ -26,7 +26,7 @@
 #     either expressed or implied, of the FreeBSD Project.
 
 
-from blargs import Parser, Option, ConflictError, ArgumentError, DependencyError, MissingRequiredArgumentError, FormatError, ConditionError, MultipleSpecifiedArgumentError, ManyAllowedNoneSpecifiedArgumentError, MissingValueError, FailedConditionError
+from blargs import Parser, Option, ConflictError, ArgumentError, DependencyError, MissingRequiredArgumentError, FormatError, ConditionError, MultipleSpecifiedArgumentError, ManyAllowedNoneSpecifiedArgumentError, MissingValueError, FailedConditionError, FakeSystemExit
 
 
 from itertools import permutations
@@ -36,10 +36,10 @@ import unittest
 class TestCase(unittest.TestCase):
     def test_error_printing(self):
         from StringIO import StringIO
-        s = StringIO()
-        try:
+        def create(strio):
             with Parser(locals()) as p:
-                p._out = s
+                p._out = strio
+                p._suppress_sys_exit = True
                 p.require_one(
                     p.all_if_any(
                         p.int('a'),
@@ -54,8 +54,10 @@ class TestCase(unittest.TestCase):
                 p.str('yi').shorthand('y')
                 p.float('z').multiple()
                 p.range('e')
-        except SystemExit: # XXX this seems like a bad idea
-            self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
+
+        s = StringIO()
+        self.assertRaises(FakeSystemExit, create, s)
+        self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
 usage: test.py
 [--a <int>] [--yi/-y <option>] [--c <int>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <int>]
 ''')

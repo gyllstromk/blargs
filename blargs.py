@@ -563,6 +563,11 @@ class Group(Option):
         return ', '.join([str(name) for name in self._names])
 
 
+class FakeSystemExit(ValueError):
+    # Used for testing
+    pass
+
+
 class Parser(object):
     ''' Command line parser. '''
 
@@ -602,6 +607,7 @@ class Parser(object):
         # help message
         self._help_prefix = None
 
+        self._suppress_sys_exit = False
         self._out = sys.stdout
 
         # set by user
@@ -1071,6 +1077,8 @@ class Parser(object):
         msg.append('usage: %s' % sys.argv[0])
         msg.append(' '.join('[%s]' % self._label(value) for value in self._options.values()))
         self.emit('\n'.join(msg))
+        if self._suppress_sys_exit:
+            raise FakeSystemExit
         sys.exit(1)
 
     @localize
