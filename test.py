@@ -312,8 +312,8 @@ class TestCase(unittest.TestCase):
         p.str('a').condition(lambda x: x['b'] != 'c')
         p.str('b')
 
-        p._process_command_line(['-a', '1', '-b', 'b'])
-        self.assertRaises(FailedConditionError, p._process_command_line, ['-a', '1', '-b', 'c'])
+        p._process_command_line(['--a', '1', '--b', 'b'])
+        self.assertRaises(FailedConditionError, p._process_command_line, ['--a', '1', '--b', 'c'])
 
     def test_localize(self):
         p = Parser.with_locals()
@@ -383,7 +383,7 @@ class TestCase(unittest.TestCase):
         def create():
             l = {}
             p = Parser(l)
-            x = p.range('a')
+            x = p.range('arg').shorthand('a')
             self.assertTrue(x is not None)
             return p, l
 
@@ -391,28 +391,28 @@ class TestCase(unittest.TestCase):
             return list(x1) == list(x2)
 
         p, l = create()
-        p._process_command_line(['--a', '1:2'])
-        self.assertTrue(xrange_equals(l['a'], xrange(1, 2)))
+        p._process_command_line(['--arg', '1:2'])
+        self.assertTrue(xrange_equals(l['arg'], xrange(1, 2)))
 
         p, l = create()
-        self.assertRaises(FormatError, p._process_command_line, ['-a', '1:s2'])
+        self.assertRaises(FormatError, p._process_command_line, ['--arg', '1:s2'])
 
         p, l = create()
-        p._process_command_line(['-a', '1:-1'])
-        self.assertTrue(xrange_equals(l['a'], xrange(1, 1)))
+        p._process_command_line(['--arg', '1:-1'])
+        self.assertTrue(xrange_equals(l['arg'], xrange(1, 1)))
 
-        v = p._process_command_line(['-a', '0', '9'])
-        self.assertTrue(xrange_equals(v['a'], xrange(0, 9)))
+        v = p._process_command_line(['--arg', '0', '9'])
+        self.assertTrue(xrange_equals(v['arg'], xrange(0, 9)))
 
-        v = p._process_command_line(['-a', '9'])
-        self.assertTrue(xrange_equals(v['a'], xrange(9)))
+        v = p._process_command_line(['--arg', '9'])
+        self.assertTrue(xrange_equals(v['arg'], xrange(9)))
 
-        v = p._process_command_line(['-a', '0', '9', '3'])
-        self.assertTrue(xrange_equals(v['a'], xrange(0, 9, 3)))
+        v = p._process_command_line(['--arg', '0', '9', '3'])
+        self.assertTrue(xrange_equals(v['arg'], xrange(0, 9, 3)))
 
         p.set_single_prefix('+')
         v = p._process_command_line(['+a', '0', '-1', '3'])
-        self.assertTrue(xrange_equals(v['a'], xrange(0, -1, 3)))
+        self.assertTrue(xrange_equals(v['arg'], xrange(0, -1, 3)))
 
     def test_multiple(self):
         p = Parser()
@@ -425,7 +425,7 @@ class TestCase(unittest.TestCase):
         x = p.str('x').multiple()
         self.assertTrue(x != None)
 
-        p._process_command_line(['-x', '1', '-x', '2'])
+        p._process_command_line(['--x', '1', '--x', '2'])
 
     def test_unspecified_default(self):
         p = Parser({})
@@ -441,12 +441,12 @@ class TestCase(unittest.TestCase):
         p = Parser({})
         p.str('x').unspecified_default().conflicts(p.str('y'))
         self.assertRaises(ConflictError, p._process_command_line,
-            ['-y', 'a', 'unspecified_default'])
+            ['--y', 'a', 'unspecified_default'])
 
         p = Parser({})
         p.str('x').unspecified_default().conflicts(p.str('y'))
         self.assertRaises(ConflictError, p._process_command_line,
-            ['unspecified_default', '-y', 'a'])
+            ['unspecified_default', '--y', 'a'])
 
         # multiple
         p = Parser()
@@ -455,7 +455,7 @@ class TestCase(unittest.TestCase):
     
     def test_with(self):
         import sys
-        sys.argv[1:] = ['-x', 'yes']
+        sys.argv[1:] = ['--x', 'yes']
         d = {'test_x': None}
 
         p = Parser(d)
@@ -484,17 +484,17 @@ class TestCase(unittest.TestCase):
     def test_add(self):
         p = Parser()
         p.str('x')
-        vals = p._process_command_line(['-x', 'hi'])
+        vals = p._process_command_line(['--x', 'hi'])
         self.assertEquals(vals['x'], 'hi')
 
         p = Parser(locals())
         p.str('x')
-        p._process_command_line(['-x', 'hi'])
+        p._process_command_line(['--x', 'hi'])
         self.assertTrue('x' in locals())
 
         p = Parser()
         p.str('x')
-        vals = p._process_command_line(['-x=5'])
+        vals = p._process_command_line(['--x=5'])
         self.assertEquals(vals['x'], '5')
 
     def test_default(self):
@@ -505,19 +505,19 @@ class TestCase(unittest.TestCase):
 
         p = Parser()
         p.int('x').default(5)
-        vals = p._process_command_line(['-x', '6'])
+        vals = p._process_command_line(['--x', '6'])
         self.assertEquals(vals['x'], 6)
     
     def test_cast(self):
         p = Parser()
         p.str('x').cast(int)
-        vals = p._process_command_line(['-x', '1'])
+        vals = p._process_command_line(['--x', '1'])
         self.assertEquals(vals['x'], 1)
-        self.assertRaises(ArgumentError, p._process_command_line, ['-x', 'a'])
+        self.assertRaises(ArgumentError, p._process_command_line, ['--x', 'a'])
 
         p = Parser()
         p.int('x')
-        vals = p._process_command_line(['-x', '1'])
+        vals = p._process_command_line(['--x', '1'])
 
     def test_required(self):
         p = Parser()
@@ -554,7 +554,7 @@ class TestCase(unittest.TestCase):
         y = p.flag('y')
         p.flag('x').requires(y)
 
-        self.assertRaises(DependencyError, p._process_command_line, ['-x'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
 
     def test_depends(self):
         def create():
@@ -563,14 +563,14 @@ class TestCase(unittest.TestCase):
 
             return p
 
-        self.assertRaises(DependencyError, create()._process_command_line, ['-x', 'hi'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--x', 'hi'])
         try:
-            create()._process_command_line(['-y', 'sup'])
+            create()._process_command_line(['--y', 'sup'])
         except:
             self.assertTrue(False)
 
         try:
-            create()._process_command_line(['-x', 'hi', '-y', 'sup'])
+            create()._process_command_line(['--x', 'hi', '--y', 'sup'])
         except:
             self.assertTrue(False)
 
@@ -587,15 +587,15 @@ class TestCase(unittest.TestCase):
 
 #        o1.add_dependency_group((o2, o3, o4))
 
-        self.assertRaises(DependencyError, create()._process_command_line, ['-x', 'hi'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--x', 'hi'])
         try:
-            create()._process_command_line(['-y', 'sup'])
+            create()._process_command_line(['--y', 'sup'])
         except:
             self.fail()
 
-        for v in permutations([('-y', 'sup'), ('-z', 'zup'), ('-w', 'wup')], 2):
+        for v in permutations([('--y', 'sup'), ('--z', 'zup'), ('--w', 'wup')], 2):
             self.assertRaises(DependencyError, create()._process_command_line,
-                    ['-x', 'hi'] + reduce(list.__add__, map(list, v)))
+                    ['--x', 'hi'] + reduce(list.__add__, map(list, v)))
 
     def test_conflicts(self):
         def create():
@@ -603,11 +603,11 @@ class TestCase(unittest.TestCase):
             p.flag('x').conflicts(p.flag('y'))
             return p
 
-        self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
-        create()._process_command_line(['-y'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--x', '--y'])
+        create()._process_command_line(['--y'])
 
         try:
-            create()._process_command_line(['-x'])
+            create()._process_command_line(['--x'])
         except:
             self.assertTrue(False)
 
@@ -621,14 +621,14 @@ class TestCase(unittest.TestCase):
             p.only_one_if_any(*'xyz')
             return p
 
-        self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y'])
-        self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-z'])
-        self.assertRaises(ConflictError, create()._process_command_line, ['-y', '-z'])
-        self.assertRaises(ConflictError, create()._process_command_line, ['-x', '-y', '-z'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--x', '--y'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--x', '--z'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--y', '--z'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--x', '--y', '--z'])
 
-        create()._process_command_line(['-x'])
-        create()._process_command_line(['-y'])
-        create()._process_command_line(['-z'])
+        create()._process_command_line(['--x'])
+        create()._process_command_line(['--y'])
+        create()._process_command_line(['--z'])
     
     def test_mutually_dependent(self):
         def create():
@@ -641,14 +641,14 @@ class TestCase(unittest.TestCase):
 
             return p
 
-        self.assertRaises(DependencyError, create()._process_command_line, ['-x'])
-        self.assertRaises(DependencyError, create()._process_command_line, ['-y'])
-        self.assertRaises(DependencyError, create()._process_command_line, ['-z'])
-        self.assertRaises(DependencyError, create()._process_command_line, ['-x', '-y'])
-        self.assertRaises(DependencyError, create()._process_command_line, ['-x', '-z'])
-        self.assertRaises(DependencyError, create()._process_command_line, ['-y', '-z'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--x'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--y'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--z'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--x', '--y'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--x', '--z'])
+        self.assertRaises(DependencyError, create()._process_command_line, ['--y', '--z'])
 
-        create()._process_command_line(['-x', '-y', '-z'])
+        create()._process_command_line(['--x', '--y', '--z'])
 
     def test_oo(self):
         p = Parser()
@@ -657,14 +657,14 @@ class TestCase(unittest.TestCase):
         p.flag('z').requires('y')
         x = p['x']
         x.requires('y', 'z')
-        self.assertRaises(DependencyError, p._process_command_line, ['-x'])
-        self.assertRaises(DependencyError, p._process_command_line, ['-z'])
-        p._process_command_line(['-y'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--z'])
+        p._process_command_line(['--y'])
 
         p = Parser()
         p.flag('x')
         p.flag('y').conflicts('x')
-        self.assertRaises(ConflictError, p._process_command_line, ['-y', '-x'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--y', '--x'])
 
 #    def test_index(self):
 #        p = Parser()
@@ -681,13 +681,13 @@ class TestCase(unittest.TestCase):
             p.at_least_one('x', 'y', 'z')
             return p
 
-        create()._process_command_line(['-x', '1'])
-        create()._process_command_line(['-y', '1'])
-        create()._process_command_line(['-z', '1'])
-        create()._process_command_line(['-x', '1', '-y', '1'])
-        create()._process_command_line(['-x', '1', '-y', '1', 'z', '1'])
-        create()._process_command_line(['-x', '1', 'z', '1'])
-        create()._process_command_line(['-y', '1', 'z', '1'])
+        create()._process_command_line(['--x', '1'])
+        create()._process_command_line(['--y', '1'])
+        create()._process_command_line(['--z', '1'])
+        create()._process_command_line(['--x', '1', '--y', '1'])
+        create()._process_command_line(['--x', '1', '--y', '1', '--z', '1'])
+        create()._process_command_line(['--x', '1', '--z', '1'])
+        create()._process_command_line(['--y', '1', '--z', '1'])
         self.assertRaises(ArgumentError, create()._process_command_line, [])
 
     def x_test_requires_n(self):
@@ -697,16 +697,16 @@ class TestCase(unittest.TestCase):
         p.flag('z')
 
         p.set_requires_n_of('x', 1, 'y', 'z')
-        self.assertRaises(DependencyError, p._process_command_line, ['-x'])
-        p._process_command_line(['-x', '-y'])
-        p._process_command_line(['-x', '-z'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
+        p._process_command_line(['--x', '--y'])
+        p._process_command_line(['--x', '--z'])
 
         p.set_requires_n_of('x', 2, 'y', 'z')
-        self.assertRaises(DependencyError, p._process_command_line, ['-x'])
-        self.assertRaises(DependencyError, p._process_command_line, ['-x', '-y'])
-        self.assertRaises(DependencyError, p._process_command_line, ['-x', '-z'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x', '--y'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--x', '--z'])
 
-        p._process_command_line(['-x', '-y', '-z'])
+        p._process_command_line(['--x', '--y', '--z'])
 
     def test_one_required(self):
         def create():
@@ -718,18 +718,18 @@ class TestCase(unittest.TestCase):
             p.require_one(*'xyz')
             return p
 
-        create()._process_command_line(['-x', '1'])
-        create()._process_command_line(['-y', '1'])
-        create()._process_command_line(['-z', '1'])
+        create()._process_command_line(['--x', '1'])
+        create()._process_command_line(['--y', '1'])
+        create()._process_command_line(['--z', '1'])
 
-        self.assertRaises(ConflictError, create()._process_command_line, ['-x', '1', '-y', '1'])
+        self.assertRaises(ConflictError, create()._process_command_line, ['--x', '1', '--y', '1'])
         self.assertRaises(ArgumentError, create()._process_command_line, [])
 
         p = Parser()
         p.flag('a')
         p.flag('b')
         p.require_one('a', 'b')
-        p._process_command_line(['-b'])
+        p._process_command_line(['--b'])
 
 
 if __name__ == '__main__':

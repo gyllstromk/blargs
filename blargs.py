@@ -867,11 +867,11 @@ class Parser(object):
         return (arg.startswith(self._single_prefix) or
                 arg.startswith(self._double_prefix))
 
-    def _parse(self, args):
+    def _parse(self, tokenized):
         argument_value = None
-        processed = {}
+        parsed = {}
 
-        for arg in args:
+        for arg in tokenized:
             if argument_value is not None:
                 if argument_value.consume_or_skip(arg):
                     continue
@@ -880,7 +880,9 @@ class Parser(object):
             argument_name = None
 
             if self._is_argument_label(arg):
-                if arg.startswith(self._double_prefix):
+                is_full = arg.startswith(self._double_prefix)
+
+                if is_full:
                     prefix = self._double_prefix
                 else:
                     prefix = self._single_prefix
@@ -889,10 +891,18 @@ class Parser(object):
 
                 argument_name = self._localize(arg)
 
-                argument_name, argument_value = self._getoption(argument_name)
+                if is_full:
+                    argument_name = self._options.get(argument_name).argname
+                    argument_value = self._readers.get(argument_name)
+                else:
+                    argument_name = self._options.get(self._alias.get(argument_name)).argname
+                    argument_value = self._readers.get(argument_name)
+
                 if argument_value is None:
                     raise UnspecifiedArgumentError(argument_name)
+
                 argument_value = argument_value(self)
+
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
 
@@ -901,20 +911,20 @@ class Parser(object):
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
-                processed.setdefault(argument_name,
+                parsed.setdefault(argument_name,
                         []).append(argument_value)
             else:
                 self._extras.append(arg)
 
-        return processed
+        return parsed
 
     def _help_if_necessary(self, processed):
         if 'help' in processed:
             self.print_help()
             sys.exit(0)
 
-    def _parseargs(self, parsed):
-        processed = {}
+    def _assign(self, parsed):
+        assigned = {}
         for key, values in parsed.iteritems():
             try:
                 if key not in self._multiple:
@@ -938,45 +948,46 @@ class Parser(object):
                     except ValueError as e:
                         raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
 
-                processed[key] = value
+                assigned[key] = value
             except MissingValueError:
                 raise MissingValueError('%s specified but missing given value'
                         % key)
 
+        # assign defaults
         for key, value in self._readers.iteritems():
             if key in parsed:
                 continue
 
             if key in self._defaults:
-                processed[key] = self._defaults[key]
+                assigned[key] = self._defaults[key]
             else:
-                processed[key] = value.default()
+                assigned[key] = value.default()
 
-        return processed
+        return assigned
 
-    def _check_multiple(self, processed):
-        for key, values in processed.iteritems():
+    def _check_multiple(self, assigned):
+        for key, values in assigned.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
 
-    def _check_conditions(self, processed):
-        for arg in processed.iterkeys():
+    def _check_conditions(self, assigned):
+        for arg in assigned.iterkeys():
             for cond in self._options[arg]._conditions:
-                if not cond(processed):
+                if not cond(assigned):
                     raise FailedConditionError()
 
-    def _check_required(self, processed):
+    def _check_required(self, assigned):
         for arg, replacements in self._required.iteritems():
             missing = []
-            if not arg._is_satisfied(processed):
+            if not arg._is_satisfied(assigned):
                 for v in replacements:
                     if isinstance(v, Group):
                         missing += v._names
                     elif not isinstance(v, Condition):
                         missing.append(v)
 
-                    if v._is_satisfied(processed):
+                    if v._is_satisfied(assigned):
                         break
                 else:
                     if missing:
@@ -985,29 +996,30 @@ class Parser(object):
                     else:
                         raise MissingRequiredArgumentError(arg)
 
-    def _check_dependencies(self, processed):
+    def _check_dependencies(self, assigned):
         for arg, deps in self._requires.iteritems():
-            if arg._is_satisfied(processed):
+            if arg._is_satisfied(assigned):
                 for v in deps:
-                    if not v._is_satisfied(processed):
+                    if not v._is_satisfied(assigned):
                         if isinstance(v, CallableCondition):
                             raise ConditionError(arg.argname, v)
                         raise DependencyError(arg, v)
 
-    def _check_conflicts(self, processed):
+    def _check_conflicts(self, assigned):
         for arg, conflicts in self._conflicts.iteritems():
-            if arg._is_satisfied(processed):
+            if arg._is_satisfied(assigned):
                 for conflict in conflicts:
-                    if conflict._is_satisfied(processed):
+                    if conflict._is_satisfied(assigned):
                         raise ConflictError(arg.argname, conflict.argname)
 
-    def _assign(self, processed):
-        self._check_conditions(processed)
-        self._check_required(processed)
-        self._check_dependencies(processed)
-        self._check_conflicts(processed)
+    def _verify(self, assigned):
+        self._check_conditions(assigned)
+        self._check_required(assigned)
+        self._check_dependencies(assigned)
+        self._check_conflicts(assigned)
 
-        for key, value in processed.iteritems():
+    def _assign_to_store(self, assigned):
+        for key, value in assigned.iteritems():
             self._store[key] = value
 
     @_options_to_names
@@ -1031,10 +1043,9 @@ class Parser(object):
             parsed = self._parse(tokenized)
             self._help_if_necessary(parsed)
             self._check_multiple(parsed)
-            processed = self._parseargs(parsed)
-#            print(parsed)
-#            print(processed)
-            self._assign(processed)
+            assigned = self._assign(parsed)
+            self._verify(assigned)
+            self._assign_to_store(assigned)
         except ArgumentError as e:
             raise e
 
