@@ -27,6 +27,7 @@
 #     those of the authors and should not be interpreted as representing
 #     official policies, either expressed or implied, of the FreeBSD Project.
 
+from __future__ import print_function
 
 import operator
 from functools import wraps
@@ -601,6 +602,8 @@ class Parser(object):
         # help message
         self._help_prefix = None
 
+        self._out = sys.stdout
+
         # set by user
         self._init_user_set(store)
 
@@ -1053,6 +1056,9 @@ class Parser(object):
 
         return self._store
 
+    def emit(self, *args):
+        print(*args, file=self._out)
+
     def process_command_line(self, args=None):
         try:
             return self._process_command_line(args)
@@ -1064,7 +1070,7 @@ class Parser(object):
         msg.append('Error: ' + str(e))
         msg.append('usage: %s' % sys.argv[0])
         msg.append(' '.join('[%s]' % self._label(value) for value in self._options.values()))
-        print('\n'.join(msg))
+        self.emit('\n'.join(msg))
         sys.exit(1)
 
     @localize
@@ -1134,9 +1140,9 @@ class Parser(object):
 
     def print_help(self):
         if self._help_prefix:
-            print(self._help_prefix)
+            self.emit(self._help_prefix)
 
-        print('Arguments: (! denotes required argument)')
+        self.emit('Arguments: (! denotes required argument)')
         column_width = -1
         for key, value in self._options.iteritems():
             column_width = max(column_width, len(self._label(value)))
@@ -1157,7 +1163,7 @@ class Parser(object):
             if reqs:
                 msg += ' (Requires %s)' % ', '.join(str(item) for item in reqs)
 
-            print(msg)
+            self.emit(msg)
 
 
 class IOParser(Parser):

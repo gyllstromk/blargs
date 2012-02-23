@@ -34,6 +34,32 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
+    def test_error_printing(self):
+        from StringIO import StringIO
+        s = StringIO()
+        try:
+            with Parser(locals()) as p:
+                p._out = s
+                p.require_one(
+                    p.all_if_any(
+                        p.int('a'),
+                        p.int('b'),
+                    ),
+                    p.only_one_if_any(
+                        p.int('c'),
+                        p.int('d'),
+                    )
+                )
+                p.int('x').required()
+                p.str('yi').shorthand('y')
+                p.float('z').multiple()
+                p.range('e')
+        except SystemExit: # XXX this seems like a bad idea
+            self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
+usage: test.py
+[--a <int>] [--yi/-y <option>] [--c <int>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <int>]
+''')
+
     def test_non_arg_exception(self):
         def inner():
             with Parser() as p:
