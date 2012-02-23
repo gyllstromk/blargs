@@ -20,7 +20,9 @@ optparse from Python's standard library. The main distinctions are:
 
   * Emphasis on `ease of use` over `configurability`.
 
-Note: blargs is currently still in *beta*. You can help by submitting bugs!
+Note: blargs is currently still in *beta*. You can help by submitting bugs here_!
+
+.. _here: https://bitbucket.org/gyllstromk/blargs/issues?status=new&status=open
 
 Installation
 ============
