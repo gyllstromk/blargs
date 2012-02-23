@@ -32,6 +32,13 @@ import unittest
 
 
 class TestCase(unittest.TestCase):
+    def test_non_arg_exception(self):
+        def inner():
+            with Parser() as p:
+                p.flag()
+
+        self.assertRaises(TypeError, inner)
+
     def test_requires_and_default(self):
         p = Parser()
         p.int('a').default(3)

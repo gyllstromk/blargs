@@ -333,6 +333,18 @@ class Option(Condition):
         [self._parser._set_conflicts(self.argname, x) for x in others]
         return self
 
+    def _cast(self):
+        return self._parser._casts.get(self.argname)
+
+    def _isrequired(self):
+        return self in self._parser._required
+
+    def _getconflicts(self):
+        return self._parser._conflicts.get(self, [])
+
+    def _getreqs(self):
+        return self._parser._requires.get(self, [])
+
     def __str__(self):
         return '--%s' % self.argname
 
@@ -560,7 +572,6 @@ class Parser(object):
             self.flag('help').shorthand('h')
 
     def _init_user_set(self, store=None):
-        self._preparsed = {}
         if store is None:
             store = {}
         self._store = store
@@ -851,6 +862,7 @@ class Parser(object):
 
     def _read(self, args):
         argument_value = None
+        preparsed = {}
 
         for arg in args:
             if argument_value is not None:
@@ -882,19 +894,21 @@ class Parser(object):
                 argument_value.consume_or_skip(arg)
 
             if argument_name:
-                self._preparsed.setdefault(argument_name,
+                preparsed.setdefault(argument_name,
                         []).append(argument_value)
             else:
                 self._extras.append(arg)
 
-    def _help_if_necessary(self):
-        if 'help' in self._preparsed:
+        return preparsed
+
+    def _help_if_necessary(self, preparsed):
+        if 'help' in preparsed:
             self.print_help()
             sys.exit(0)
 
-    def _parseargs(self):
+    def _parseargs(self, preparsed):
         parsed = {}
-        for key, values in self._preparsed.iteritems():
+        for key, values in preparsed.iteritems():
             try:
                 if key not in self._multiple:
                     value = values[0].get()
@@ -907,7 +921,7 @@ class Parser(object):
                         value = cast(value)
                     except FormatError:
                         raise
-                    except ValueError:
+                    except ValueError as e:
                         raise FormatError('Cannot cast %s to %s', value, cast)
 
                 parsed[key] = value
@@ -926,8 +940,8 @@ class Parser(object):
 
         return parsed
 
-    def _check_multiple(self):
-        for key, values in self._preparsed.iteritems():
+    def _check_multiple(self, preparsed):
+        for key, values in preparsed.iteritems():
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple'
                         + ' times') % self._to_flag(key))
@@ -973,10 +987,10 @@ class Parser(object):
                     if conflict._is_satisfied(parsed):
                         raise ConflictError(arg.argname, conflict.argname)
 
-    def _assign(self):
-        parsed = self._parseargs()
+    def _assign(self, preparsed):
+        parsed = self._parseargs(preparsed)
 
-        self._check_multiple()
+        self._check_multiple(preparsed)
         self._check_conditions(parsed)
         self._check_required(parsed)
         self._check_dependencies(parsed)
@@ -1003,15 +1017,15 @@ class Parser(object):
         try:
             args = self._get_args(args)
             args = self._parse(args)
-            self._read(args)
-            self._help_if_necessary()
+            preparsed = self._read(args)
+            self._help_if_necessary(preparsed)
 
-            self._assign()
+            self._assign(preparsed)
             store = self._store
         except ArgumentError as e:
             raise e
-        finally:
-            self._init_user_set()  # reset
+
+        self._init_user_set()  # reset
 
         return store
 
@@ -1028,7 +1042,7 @@ class Parser(object):
         else:
             msg.append(str(e))
         msg.append('usage: %s' % sys.argv[0])
-        msg.append(' '.join('[%s]' % self._label(key) for key in self._readers))
+        msg.append(' '.join('[%s]' % self._label(value) for value in self._options.values()))
         print('\n'.join(msg))
         sys.exit(1)
 
@@ -1067,21 +1081,35 @@ class Parser(object):
     def __enter__(self):
         return self
 
-    def __exit__(self, a, b, c):
-        self.process_command_line()
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None or isinstance(exc_type, ArgumentError):
+            self.process_command_line()
+            return True
+        return False
 
-    def _option_label(self, name):
-        return self._option_labels.get(name, 'option')
+    def _option_label(self, name, opt):
+        label = self._option_labels.get(name)
+        if label is not None:
+            return label
 
-    def _label(self, name):
-        pkey = self._to_flag(name)
-        for k, v in self._alias.iteritems():
-            if name in v:
-                pkey += ',' + self._to_flag(k)
+        if opt._cast() is int:
+            return 'int'
 
-        value = self._readers[name]
-        if value != _FlagArgumentReader:
-            pkey = '%s <%s>' % (pkey, self._option_label(name))
+        if opt._cast() is float:
+            return 'float'
+
+        return 'option'
+
+    def _label(self, opt):
+        pkey = self._to_flag(opt.argname)
+        alias = self._alias.get(opt.argname)
+        if alias:
+            print(alias)
+            pkey += ',' + self._to_flag(k)
+
+        reader = self._readers[opt.argname]
+        if reader != _FlagArgumentReader:
+            pkey = '%s <%s>' % (pkey, self._option_label(opt.argname, opt))
 
         return pkey
 
@@ -1091,13 +1119,26 @@ class Parser(object):
 
         print('Arguments:')
         column_width = -1
-        for key in self._readers:
-            column_width = max(column_width, len(self._label(key)))
+        for key, value in self._options.iteritems():
+            column_width = max(column_width, len(self._label(value)))
 
         fmt = '   %-' + str(column_width) + 's'
 
-        for key in self._readers:
-            print(fmt % self._label(key))
+        for key, value in self._options.iteritems():
+            msg = fmt % self._label(value)
+
+            if value._isrequired():
+                msg += ' (Required)'
+
+            conflicts = value._getconflicts()
+            if conflicts:
+                msg += ' (Conflicts with %s)' % ', '.join(str(item) for item in conflicts)
+
+            reqs = value._getreqs()
+            if reqs:
+                msg += ' (Requires %s)' % ', '.join(str(item) for item in reqs)
+
+            print(msg)
 
 
 class IOParser(Parser):
@@ -1148,4 +1189,5 @@ class IOParser(Parser):
         return self._add_option(name).cast(opener)
 
 
-__version__ = '0.2.13a'
+__all__ = ['Parser']
+__version__ = '0.2.14a'
