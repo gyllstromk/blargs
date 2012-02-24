@@ -333,6 +333,21 @@ usage: test.py
         self.assertRaises(MissingRequiredArgumentError,
                 p._process_command_line, ['--a', '20'])
 
+        p = Parser()
+        a = p.flag('a')
+        b = p.flag('b')
+        p.flag('c').requires(a.or_(b))
+        p.flag('d').requires(a.and_(b))
+
+        self.assertRaises(DependencyError, p._process_command_line, ['--c'])
+        p._process_command_line(['--c', '--a'])
+        p._process_command_line(['--c', '--b'])
+        p._process_command_line(['--c', '--a', '--b'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--d'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--d', '--a'])
+        self.assertRaises(DependencyError, p._process_command_line, ['--d', '--b'])
+        p._process_command_line(['--d', '--a', '--b'])
+
     def test_redundant(self):
         try:
             with Parser() as p:
@@ -645,9 +660,9 @@ usage: test.py
                 p._process_command_line, [])
 
         p = Parser()
-        p.str('y')
-        p.str('z')
-        x = p.str('x').unless('y', 'z')
+        y = p.str('y')
+        z = p.str('z')
+        x = p.str('x').unless(y.or_(z))
         self.assertTrue(x != None)
         self.assertRaises(ArgumentError,
                 p._process_command_line, [])

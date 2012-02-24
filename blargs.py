@@ -284,9 +284,17 @@ class Condition(object):
         self._and = True
         self._neg = False
 
+    def copy(self):
+        c = self.__new__(self.__class__)
+        c._other_conditions = self._other_conditions[:]
+        c._and = self._and
+        c._neg = self._neg
+        return c
+
     def __neg__(self):
-        self._neg = True
-        return self
+        c = self.copy()
+        c._neg = True
+        return c
 
     def _inner_satisfied(self, parsed):
         raise NotImplementedError
@@ -295,13 +303,15 @@ class Condition(object):
         if not self._and:
             raise ValueError('and/or both specified')
 
-        self._other_conditions.append(condition)
-        return self
+        c = self.copy()
+        c._other_conditions.append(condition)
+        return c
 
     def or_(self, condition):
-        self._other_conditions.append(condition)
-        self._and = False
-        return self
+        c = self.copy()
+        c._other_conditions.append(condition)
+        c._and = False
+        return c
 
     def _is_satisfied(self, parsed):
         def _inner():
@@ -326,6 +336,13 @@ class CallableCondition(Condition):
         self._call = call
         self._main = main
         self._other = other
+
+    def copy(self):
+        c = super(CallableCondition, self).copy()
+        c._call = self._call
+        c._main = self._main
+        c._other = self._other
+        return c
 
     def _inner_satisfied(self, parsed):
         newargs = []
@@ -362,6 +379,13 @@ class Option(Condition):
         self.argname = argname
         self._parser = parser
         self._conditions = []
+
+    def copy(self):
+        c = super(Option, self).copy()
+        c.argname = self.argname
+        c._parser = self._parser
+        c._conditions = self._conditions
+        return c
 
     def requires(self, *conditions):
         ''' Specifiy other options/conditions which this argument requires.
@@ -423,14 +447,15 @@ class Option(Condition):
         self._parser._set_required(self.argname)
         return self
 
-    def if_(self, *replacements):
-        self._parser._set_required(self.argname, [-x for x in replacements])
+    def if_(self, condition):
+        ''' Argument is required if ``conditions``. '''
+        self._parser._set_required(self.argname, [-condition])
         return self
 
-    def unless(self, *replacements):
-        ''' Argument is required unless replacements specified. '''
+    def unless(self, condition):
+        ''' Argument is required unless ``conditions``. '''
 
-        self._parser._set_required(self.argname, replacements)
+        self._parser._set_required(self.argname, [condition])
         return self
 
     def unspecified_default(self):
