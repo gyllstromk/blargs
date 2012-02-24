@@ -266,13 +266,27 @@ Note that to avoid ambiguity, only one argument type may be an
 Creating your own types
 -----------------------
 
-It is possible to create your own types using the `cast` function, in which you specify a function that is run on the value at parse time. Let's say we want the user to be able to pass a comma-separated list of float values:
+It is possible to create your own types using the `cast` function, in which you specify a function that is run on the value at parse time. Let's say we want the user to be able to pass a comma-separated list of ``float`` values, or a space-delimited list of ``int`` values:
 
 >>> with Parser(locals()) as p:
-...    p.multiword('floatlist').cast(lambda x: [float(val) for val in x.split(',')])
+...    p.str('floatlist').cast(lambda x: [float(val) for val in x.split(',')])
+...    p.multiword('intlist').cast(lambda x: [int(val) for val in x.split()])
+
+A sample command line:
+
+::
+
+    python test.py --floatlist 1.2,3.9,8.6 --intlist 1 9 2
+
+We now can access these:
+
+>>> print floatlist, intlist
+... [1.2, 3.9, 8.6], [1, 9, 2]
 
 Conditions
 ==========
+
+Conditions extend the concept of dependencies and conflicts with conditionals.
 
 if
 --
@@ -298,6 +312,8 @@ Argument must be specified ``unless`` ``condition``.
 
 requires
 --------
+
+We described ``requires`` previously, but here we show that it also works with conditional expressions.
 
 If argument is specified, then ``condition`` must be true;
 

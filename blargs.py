@@ -30,7 +30,7 @@
 from __future__ import print_function
 
 import operator
-from functools import wraps
+from functools import partial, wraps
 from itertools import starmap, permutations
 import sys
 
@@ -74,6 +74,16 @@ def _RangeCaster(value):
         return xrange(*[int(y) for y in toks])
     except ValueError:
         raise_error()
+
+
+def _FileOpenerCaster(mode=None, buffering=None):
+    kw = {}
+    if mode is not None:
+        kw['mode'] = mode
+    if buffering is not None:
+        kw['buffering'] = buffering
+
+    return partial(open, **kw)
 
 
 # ---------- decorators ---------- #
@@ -501,6 +511,8 @@ class _MultiWordArgumentReader(_ArgumentReader):
         return True
 
     def get(self):
+        if len(self.value) == 0:
+            raise MissingValueError
         return ' '.join(self.value)
 
 
@@ -747,6 +759,11 @@ class Parser(object):
         result = self._add_option(name)
         self._set_reader(name, _FlagArgumentReader)
         return result
+
+    def file(self, name, mode=None, buffering=None):
+        m = self.multiword(name)
+        m.cast(_FileOpenerCaster(mode, buffering))
+        return m
 
 # --- aggregate calls --- #
 

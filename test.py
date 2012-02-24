@@ -26,11 +26,47 @@
 #     either expressed or implied, of the FreeBSD Project.
 
 
-from blargs import Parser, Option, ConflictError, ArgumentError, DependencyError, MissingRequiredArgumentError, FormatError, ConditionError, MultipleSpecifiedArgumentError, ManyAllowedNoneSpecifiedArgumentError, MissingValueError, FailedConditionError, FakeSystemExit
+from blargs import Parser, Option, ConflictError, ArgumentError,\
+                   DependencyError, MissingRequiredArgumentError,\
+                   FormatError, ConditionError,\
+                   MultipleSpecifiedArgumentError,\
+                   ManyAllowedNoneSpecifiedArgumentError,\
+                   MissingValueError, FailedConditionError,\
+                   FakeSystemExit
 
 
+import os
 from itertools import permutations
 import unittest
+
+
+class FileBasedTestCase(unittest.TestCase):
+    def setUp(self):
+        from tempfile import mkdtemp
+        self._dir = mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._dir)
+
+    def test_file(self):
+        p = Parser(locals())
+        p.file('a')
+        self.assertRaises(MissingValueError, p._process_command_line, ['--a'])
+        self.assertRaises(IOError, p._process_command_line, ['--a', 'aaa'])
+        vals = p._process_command_line(['--a', 'test.py'])
+        self.assertEquals(vals['a'].read(), open('test.py').read())
+
+        p = Parser(locals())
+        p.file('a', mode='w')
+        fname = os.path.join(self._dir, 'mytest')
+        vals = p._process_command_line(['--a', fname])
+        f = vals['a']
+        msg = 'aaaxxx'
+        f.write(msg)
+        f.close()
+
+        self.assertEquals(open(fname).read(), msg)
 
 
 class TestCase(unittest.TestCase):
@@ -356,6 +392,7 @@ usage: test.py
         p.multiword('aa')
         p.str('ab')
 
+        self.assertRaises(MissingValueError, p._process_command_line, ['--aa'])
         vals = p._process_command_line(['--aa', 'a', '--ab', 'b'])
         self.assertEquals(vals['aa'], 'a')
         self.assertEquals(vals['ab'], 'b')
@@ -404,8 +441,11 @@ usage: test.py
 
     def test_shorthand(self):
         p = Parser()
-        p.int('aa').shorthand('a')
+        aa = p.int('aa').shorthand('a')
         self.assertRaises(ValueError, lambda x: p.int('ab').shorthand(x), 'a')
+        self.assertRaises(ValueError, p.int('bb').shorthand, 'a')
+        self.assertRaises(ValueError, aa.shorthand, 'a')
+#        self.assertRaises(ValueError, aa.shorthand, 'b')
 
     def test_range(self):
         def create():
@@ -419,6 +459,7 @@ usage: test.py
             return list(x1) == list(x2)
 
         p, l = create()
+        self.assertRaises(MissingValueError, p._process_command_line, ['--arg'])
         p._process_command_line(['--arg', '1:2'])
         self.assertTrue(xrange_equals(l['arg'], xrange(1, 2)))
 
