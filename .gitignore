@@ -1,0 +1,7 @@
+.tox
+env/
+doc/_build
+.gitignore
+dist/
+*.swp
+*.pyc

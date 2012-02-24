@@ -10,7 +10,7 @@ def cmd(command):
 
 
 def pretest():
-    if cmd('python test.py') != 0:
+    if cmd('tox') != 0:
         print('Failed test')
         sys.exit(1)
 

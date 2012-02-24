@@ -127,9 +127,9 @@ class TestCase(unittest.TestCase):
         s = StringIO()
         self.assertRaises(FakeSystemExit, create, s)
         self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
-usage: test.py
+usage: {0}
 [--a <int>] [--yi/-y <option>] [--c <int>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <int>]
-''')
+'''.format(sys.argv[0]))
 
     def test_url(self):
         p = Parser()
@@ -468,32 +468,6 @@ usage: test.py
 
         self.assertRaises(ValueError, Parser().set_single_prefix('++').set_double_prefix, '+')
 
-    def x_test_with_files(self):
-        d = TemporaryDirectory()
-
-        p = Parser()
-        p.add_file('f')
-        p.flag('F')
-        p.set_requires('f', 'F')
-
-        f = d / File('hello')
-
-        self.assertRaises(DependencyError, p._process_command_line, ['-f', str(f.path())])
-
-        p = Parser()
-        p.add_input_file('i').shorthand('input')
-        f.writer(overwrite=True).write('sup')
-        vals = p._process_command_line(['-i', str(f.path())])
-
-        self.assertRaises(IOError, vals['i'].write, ('hi'))
-        f.remove()
-
-        p = Parser()
-        p.add_input_file('i').shorthand('input')
-        f = d / File('hello_world')
-        f.writer(overwrite=True).write('sup')
-        vals = p._process_command_line(['-i', str(f.path())])
-
     def test_shorthand(self):
         p = Parser()
         aa = p.int('aa').shorthand('a')
@@ -820,23 +794,6 @@ usage: test.py
         create()._process_command_line(['--y', '1', '--z', '1'])
         self.assertRaises(ArgumentError, create()._process_command_line, [])
 
-    def x_test_requires_n(self):
-        p = Parser()
-        p.flag('x')
-        p.flag('y')
-        p.flag('z')
-
-        p.set_requires_n_of('x', 1, 'y', 'z')
-        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
-        p._process_command_line(['--x', '--y'])
-        p._process_command_line(['--x', '--z'])
-
-        p.set_requires_n_of('x', 2, 'y', 'z')
-        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
-        self.assertRaises(DependencyError, p._process_command_line, ['--x', '--y'])
-        self.assertRaises(DependencyError, p._process_command_line, ['--x', '--z'])
-
-        p._process_command_line(['--x', '--y', '--z'])
 
     def test_one_required(self):
         def create():
