@@ -1243,4 +1243,4 @@ class Parser(object):
 
 
 __all__ = ['Parser']
-__version__ = '0.2.14a'
+__version__ = '0.2.17a'
