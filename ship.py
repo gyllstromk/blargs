@@ -49,22 +49,8 @@ def cleanup():
     cmd('git checkout exp')
 
 
-#def test():
-#    os.mkdir('tmp')
-#    cmd('
-#    cd tmp
-#    virtualenv --distribute test
-#    ./test/bin/pip install blargs
-#    python -c "import sys; sys.path.append('test/lib/python2.7/site-packages/'); import blargs"
-#    result=$?
-#    cd ..
-#    rm tmp
-#
-#    if [[ result == 1 ]]
-#    then
-#        echo 'Failed'
-#    fi
-
+def test():
+    cmd('./deploy/test')
 
 
 if __name__ == '__main__':
@@ -74,4 +60,5 @@ if __name__ == '__main__':
     update_version(major)
     git_merge()
     publish()
+    test()
     cleanup()

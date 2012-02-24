@@ -36,6 +36,21 @@ from itertools import starmap, permutations
 import sys
 
 
+if sys.version_info[0] == 3:
+    iterkeys = lambda x: x.keys()
+    iteritems = lambda x: x.items()
+    isstring = lambda x: isinstance(x, str)
+    from urllib.parse import urlparse
+    xrange = range
+else:
+    iterkeys = lambda x: x.iterkeys()
+    iteritems = lambda x: x.iteritems()
+    isstring = lambda x: isinstance(x, basestring)
+    from urlparse import urlparse
+
+#iterkeys
+#def iterkeys(
+
 def _RangeCaster(value):
     def raise_error():
         raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
@@ -95,7 +110,7 @@ def _names_to_options(f):
     def inner(*args, **kwargs):
         new_args = []
         for arg in args[1:]:
-            if isinstance(arg, basestring):
+            if isstring(arg):
                 arg = args[0]._options[arg]
 
             new_args.append(arg)
@@ -130,7 +145,7 @@ def _verify_args_exist(f):
 
         self = args[0]
         for arg in args[1:]:
-            if isinstance(arg, basestring) and arg not in self._readers:
+            if isstring(arg) and arg not in self._readers:
                 raise_error(arg)
 
         return f(*args, **kwargs)
@@ -145,7 +160,7 @@ def _localize_all(f):
         self = args[0]
         new_args = []
         for arg in args[1:]:
-            if isinstance(arg, basestring):
+            if isstring(arg):
                 arg = self._localize(arg)
             new_args.append(arg)
         args[1:] = new_args
@@ -214,7 +229,7 @@ class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
 
     def __init__(self, allowed):
         super(ManyAllowedNoneSpecifiedArgumentError, self).__init__(('[%s] not'
-                + ' specified') % ', '.join(map(str, allowed)))
+                + ' specified') % ', '.join(sorted(map(str, allowed))))
 
 
 class UnspecifiedArgumentError(ArgumentError):
@@ -456,6 +471,9 @@ class Option(Condition):
 
     def __ne__(self, other):
         return self._make_condition(operator.__ne__, other)
+
+    def __hash__(self):
+        return hash(str(self.argname))
 
     # -- private access methods
 
@@ -791,7 +809,6 @@ class Parser(object):
         ''' URL value; verifies that argument has a scheme (e.g., http, ftp,
         file). '''
 
-        from urlparse import urlparse
         def parse(value):
             if urlparse(value).scheme == '':
                 raise FormatError('%s not valid URL' % value)
@@ -985,7 +1002,7 @@ class Parser(object):
 
     def _assign(self, parsed):
         assigned = {}
-        for key, values in parsed.iteritems():
+        for key, values in iteritems(parsed):
             try:
                 if key not in self._multiple:
                     value = values[0].get()
@@ -1014,7 +1031,7 @@ class Parser(object):
                         % key)
 
         # assign defaults
-        for key, value in self._readers.iteritems():
+        for key, value in iteritems(self._readers):
             if key in parsed:
                 continue
 
@@ -1026,19 +1043,19 @@ class Parser(object):
         return assigned
 
     def _check_multiple(self, assigned):
-        for key, values in assigned.iteritems():
+        for key, values in iteritems(assigned):
             if len(values) > 1 and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
 
     def _check_conditions(self, assigned):
-        for arg in assigned.iterkeys():
+        for arg in iterkeys(assigned):
             for cond in self._options[arg]._conditions:
                 if not cond(assigned):
                     raise FailedConditionError()
 
     def _check_required(self, assigned):
-        for arg, replacements in self._required.iteritems():
+        for arg, replacements in iteritems(self._required):
             missing = []
             if not arg._is_satisfied(assigned):
                 for v in replacements:
@@ -1057,7 +1074,7 @@ class Parser(object):
                         raise MissingRequiredArgumentError(arg)
 
     def _check_dependencies(self, assigned):
-        for arg, deps in self._requires.iteritems():
+        for arg, deps in iteritems(self._requires):
             if arg._is_satisfied(assigned):
                 for v in deps:
                     if not v._is_satisfied(assigned):
@@ -1066,7 +1083,7 @@ class Parser(object):
                         raise DependencyError(arg, v)
 
     def _check_conflicts(self, assigned):
-        for arg, conflicts in self._conflicts.iteritems():
+        for arg, conflicts in iteritems(self._conflicts):
             if arg._is_satisfied(assigned):
                 for conflict in conflicts:
                     if conflict._is_satisfied(assigned):
@@ -1079,7 +1096,7 @@ class Parser(object):
         self._check_conflicts(assigned)
 
     def _assign_to_store(self, assigned):
-        for key, value in assigned.iteritems():
+        for key, value in iteritems(assigned):
             self._store[key] = value
 
     @_options_to_names
@@ -1203,12 +1220,12 @@ class Parser(object):
 
         self.emit('Arguments: (! denotes required argument)')
         column_width = -1
-        for key, value in self._options.iteritems():
+        for key, value in iteritems(self._options):
             column_width = max(column_width, len(self._label(value)))
 
         fmt = '   %-' + str(column_width) + 's'
 
-        for key, value in self._options.iteritems():
+        for key, value in iteritems(self._options):
             msg = fmt % self._label(value)
 
             if value._isrequired():

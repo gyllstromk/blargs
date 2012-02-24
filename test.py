@@ -35,9 +35,20 @@ from blargs import Parser, Option, ConflictError, ArgumentError,\
                    FakeSystemExit
 
 
+import sys
 import os
 from itertools import permutations
 import unittest
+
+
+if sys.version_info[0] == 3:
+    import functools
+    reduce = functools.reduce
+    xrange = range
+    import io
+    StringIO = io.StringIO
+else:
+    from StringIO import StringIO
 
 
 class FileBasedTestCase(unittest.TestCase):
@@ -55,7 +66,8 @@ class FileBasedTestCase(unittest.TestCase):
         self.assertRaises(MissingValueError, p._process_command_line, ['--a'])
         self.assertRaises(IOError, p._process_command_line, ['--a', 'aaa'])
         vals = p._process_command_line(['--a', 'test.py'])
-        self.assertEquals(vals['a'].read(), open('test.py').read())
+        with open('test.py') as f:
+            self.assertEqual(vals['a'].read(), f.read())
 
         p = Parser(locals())
         p.file('a', mode='w')
@@ -66,7 +78,8 @@ class FileBasedTestCase(unittest.TestCase):
         f.write(msg)
         f.close()
 
-        self.assertEquals(open(fname).read(), msg)
+        with open(fname) as f:
+            self.assertEqual(f.read(), msg)
 
     def test_directory(self):
         p = Parser(locals())
@@ -75,23 +88,23 @@ class FileBasedTestCase(unittest.TestCase):
         self.assertRaises(IOError, p._process_command_line, ['--a', dirpath])
         os.mkdir(dirpath)
         vals = p._process_command_line(['--a', dirpath])
-        self.assertEquals(vals['a'], dirpath)
+        self.assertEqual(vals['a'], dirpath)
 
         # fail when trying to indicate directory that is actually a file
         fname = os.path.join(self._dir, 'testfile')
-        open(fname, 'w').write('mmm')
+        with open(fname, 'w') as f:
+            f.write('mmm')
         self.assertRaises(IOError, p._process_command_line, ['--a', fname])
 
         # create directory
         dirpath = os.path.join(self._dir, 'sub', 'leaf')
         p.directory('b', create=True)
         vals = p._process_command_line(['--b', dirpath])
-        self.assertEquals(vals['b'], dirpath)
+        self.assertEqual(vals['b'], dirpath)
 
 
 class TestCase(unittest.TestCase):
     def test_error_printing(self):
-        from StringIO import StringIO
         def create(strio):
             with Parser(locals()) as p:
                 p._out = strio
@@ -394,9 +407,9 @@ usage: test.py
 #        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
 #        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
 #        for arg in ('1', '2', 'b'):
-#            self.assertEquals(p._process_command_line(['--a', arg])['a'], arg)
+#            self.assertEqual(p._process_command_line(['--a', arg])['a'], arg)
 #
-#        self.assertEquals(p._process_command_line([])['a'], default)
+#        self.assertEqual(p._process_command_line([])['a'], default)
 
     def test_condition(self):
         p = Parser()
@@ -421,22 +434,22 @@ usage: test.py
 
         self.assertRaises(MissingValueError, p._process_command_line, ['--aa'])
         vals = p._process_command_line(['--aa', 'a', '--ab', 'b'])
-        self.assertEquals(vals['aa'], 'a')
-        self.assertEquals(vals['ab'], 'b')
+        self.assertEqual(vals['aa'], 'a')
+        self.assertEqual(vals['ab'], 'b')
 
         vals = p._process_command_line(['--aa', 'a c d', '--ab', 'b'])
-        self.assertEquals(vals['aa'], 'a c d')
+        self.assertEqual(vals['aa'], 'a c d')
 
         vals = p._process_command_line(['--aa', 'a', 'c', 'd', '--ab', 'b'])
-        self.assertEquals(vals['aa'], 'a c d')
+        self.assertEqual(vals['aa'], 'a c d')
 
         p = Parser().set_single_prefix('+').set_double_prefix('M')
         p.multiword('aa')
         p.str('ab').shorthand('a')
         vals = p._process_command_line(['Maa', 'a', 'c', 'd', 'Mab', 'b'])
-        self.assertEquals(vals['aa'], 'a c d')
+        self.assertEqual(vals['aa'], 'a c d')
         vals = p._process_command_line(['Maa', 'a', 'c', 'd', '+a', 'b'])
-        self.assertEquals(vals['aa'], 'a c d')
+        self.assertEqual(vals['aa'], 'a c d')
 
         self.assertRaises(ValueError, Parser().set_single_prefix('++').set_double_prefix, '+')
 
@@ -581,7 +594,7 @@ usage: test.py
         p = Parser()
         p.str('x')
         vals = p._process_command_line(['--x', 'hi'])
-        self.assertEquals(vals['x'], 'hi')
+        self.assertEqual(vals['x'], 'hi')
 
         p = Parser(locals())
         p.str('x')
@@ -591,24 +604,24 @@ usage: test.py
         p = Parser()
         p.str('x')
         vals = p._process_command_line(['--x=5'])
-        self.assertEquals(vals['x'], '5')
+        self.assertEqual(vals['x'], '5')
 
     def test_default(self):
         p = Parser()
         p.int('x').default(5)
         vals = p._process_command_line([])
-        self.assertEquals(vals['x'], 5)
+        self.assertEqual(vals['x'], 5)
 
         p = Parser()
         p.int('x').default(5)
         vals = p._process_command_line(['--x', '6'])
-        self.assertEquals(vals['x'], 6)
+        self.assertEqual(vals['x'], 6)
     
     def test_cast(self):
         p = Parser()
         p.str('x').cast(int)
         vals = p._process_command_line(['--x', '1'])
-        self.assertEquals(vals['x'], 1)
+        self.assertEqual(vals['x'], 1)
         self.assertRaises(ArgumentError, p._process_command_line, ['--x', 'a'])
 
         p = Parser()
@@ -616,9 +629,9 @@ usage: test.py
         vals = p._process_command_line(['--x', '1'])
 
         p = Parser()
-        p.multiword('x').cast(lambda x: map(float, x.split()))
+        p.multiword('x').cast(lambda x: [float(y) for y in x.split()])
         vals = p._process_command_line(['--x', '1.2 9.8 4.6'])
-        self.assertEquals(vals['x'], [1.2, 9.8000000000000007,
+        self.assertEqual(vals['x'], [1.2, 9.8000000000000007,
             4.5999999999999996])
 
     def test_required(self):
@@ -771,7 +784,7 @@ usage: test.py
 #    def test_index(self):
 #        p = Parser()
 #        p.str('x')
-#        self.assertEquals(p['y'], None)
+#        self.assertEqual(p['y'], None)
     
     def test_set_at_least_one_required(self):
         def create():
