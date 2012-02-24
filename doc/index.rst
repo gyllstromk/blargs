@@ -20,7 +20,7 @@ optparse from Python's standard library. The main distinctions are:
 
   * Emphasis on `ease of use` over `configurability`.
 
-Blargs works for Python2.6 to Python3.2.
+Blargs has been tested on Python2.6 to Python3.2 and PyPy.
 
 Note: blargs is currently still in *beta*. You can help by submitting bugs here_!
 
