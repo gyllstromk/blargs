@@ -36,23 +36,6 @@ from itertools import starmap, permutations
 import sys
 
 
-def Config(filename, dictionary=None, overwrite=True):
-    if dictionary is None:
-        dictionary = {}
-
-    for item in open(filename):
-        if item.startswith('#'):
-            continue
-
-        toks = item.rstrip().split()
-        if len(toks) == 2:
-            if dictionary.get(toks[0], None) is not None and not overwrite:
-                continue
-            dictionary.__setitem__(*toks)
-
-    return dictionary
-
-
 def _RangeCaster(value):
     def raise_error():
         raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
