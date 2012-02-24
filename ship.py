@@ -6,7 +6,13 @@ import sys
 
 
 def cmd(command):
-    subprocess.call(command.split())
+    return subprocess.call(command.split())
+
+
+def pretest():
+    if cmd('python test.py') != 0:
+        print('Failed test')
+        sys.exit(1)
 
 
 def update_version(major):
@@ -57,6 +63,7 @@ if __name__ == '__main__':
     with Parser(locals()) as p:
         p.flag('major')
 
+    pretest()
     update_version(major)
     git_merge()
     publish()
