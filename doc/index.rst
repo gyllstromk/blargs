@@ -41,6 +41,7 @@ Or by git:
 
 License
 =======
+
 BSD
 
 .. One big example
@@ -119,7 +120,9 @@ Specifying arguments
 ...    # complex types
 ...    p.range('range_arg')     # --range_arg 1:2
 ...    p.multiword('multi_arg') # --multi_arg hello world
-...    p.enum('enum_arg')       # 
+.. ...    p.enum('enum_arg')       # 
+...    p.file('file_arg')       # --file_arg README.txt
+...    p.directory('dir_arg')   # --dir_arg /tmp/
 
 On occasions you may need to refer to a created argument to specify
 relationships. This can be done at creation time, or by a lookup. The
@@ -492,8 +495,8 @@ Code
 ..	autoclass:: Option
   :members:
 
-..	autoclass:: IOParser
-  :members:
+.. ..	autoclass:: IOParser
+..   :members:
 
 Exceptions
 ----------

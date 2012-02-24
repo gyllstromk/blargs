@@ -68,6 +68,26 @@ class FileBasedTestCase(unittest.TestCase):
 
         self.assertEquals(open(fname).read(), msg)
 
+    def test_directory(self):
+        p = Parser(locals())
+        p.directory('a')
+        dirpath = os.path.join(self._dir, 'ok')
+        self.assertRaises(IOError, p._process_command_line, ['--a', dirpath])
+        os.mkdir(dirpath)
+        vals = p._process_command_line(['--a', dirpath])
+        self.assertEquals(vals['a'], dirpath)
+
+        # fail when trying to indicate directory that is actually a file
+        fname = os.path.join(self._dir, 'testfile')
+        open(fname, 'w').write('mmm')
+        self.assertRaises(IOError, p._process_command_line, ['--a', fname])
+
+        # create directory
+        dirpath = os.path.join(self._dir, 'sub', 'leaf')
+        p.directory('b', create=True)
+        vals = p._process_command_line(['--b', dirpath])
+        self.assertEquals(vals['b'], dirpath)
+
 
 class TestCase(unittest.TestCase):
     def test_error_printing(self):
@@ -97,6 +117,13 @@ class TestCase(unittest.TestCase):
 usage: test.py
 [--a <int>] [--yi/-y <option>] [--c <int>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <int>]
 ''')
+
+    def test_url(self):
+        p = Parser()
+        p.url('url')
+        vals = p._process_command_line(['--url', 'http://www.com'])
+        self.assertRaises(FormatError, p._process_command_line, ['--url', '/www.com'])
+
 
     def test_non_arg_exception(self):
         def inner():

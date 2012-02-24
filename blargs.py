@@ -29,6 +29,7 @@
 
 from __future__ import print_function
 
+import os
 import operator
 from functools import partial, wraps
 from itertools import starmap, permutations
@@ -74,6 +75,23 @@ def _RangeCaster(value):
         return xrange(*[int(y) for y in toks])
     except ValueError:
         raise_error()
+
+
+class _DirectoryOpenerCaster(object):
+    def __init__(self, create):
+        self._create = create
+
+    def __call__(self, name):
+        if not os.path.exists(name):
+            if self._create:
+                os.makedirs(name)
+                return name
+            raise IOError('%s does not exist' % name)
+
+        if not os.path.isdir(name):
+            raise IOError('%s is not directory' % name)
+
+        return name
 
 
 def _FileOpenerCaster(mode=None, buffering=None):
@@ -347,44 +365,27 @@ class Option(Condition):
         self._parser = parser
         self._conditions = []
 
-    def requires(self, *others):
-        ''' Specifiy other options which this argument requires.
+    def requires(self, *conditions):
+        ''' Specifiy other options/conditions which this argument requires.
 
-        :param others: required options
-        :type others: sequence of either :class:`Option` or basestring of \
-                    option names
+        :param conditions: required conditions
+        :type others: sequence of either :class:`Option` or :class:`Condition`s 
         '''
-        [self._parser._set_requires(self.argname, x) for x in others]
+        [self._parser._set_requires(self.argname, x) for x in conditions]
         return self
 
     def condition(self, func):
         self._conditions.append(func)
         return self
 
-    def conflicts(self, *others):
-        ''' Specifiy other options which this argument conflicts with.
+    def conflicts(self, *conditions):
+        ''' Specifiy other conditions which this argument conflicts with.
 
-        :param others: conflicting options
-        :type others: sequence of either :class:`Option` or basestring of \
-            option names
+        :param conditions: conflicting options/conditions
+        :type conditions: sequence of either :class:`Option` or :class:`Condition`
         '''
-        [self._parser._set_conflicts(self.argname, x) for x in others]
+        [self._parser._set_conflicts(self.argname, x) for x in conditions]
         return self
-
-    def _cast(self):
-        return self._parser._casts.get(self.argname)
-
-    def _isrequired(self):
-        return self in self._parser._required
-
-    def _getconflicts(self):
-        return self._parser._conflicts.get(self, [])
-
-    def _getreqs(self):
-        return self._parser._requires.get(self, [])
-
-    def _alias(self):
-        return self._parser._source_to_alias.get(self.argname)
 
     def __str__(self):
         v = '%s%s' % (self._parser._double_prefix, self.argname)
@@ -446,6 +447,8 @@ class Option(Condition):
         self._parser._set_multiple(self.argname)
         return self
 
+    # --- conditions
+
     def _inner_satisfied(self, parsed):
         v = parsed.get(self.argname)
         return v is not None and v != False
@@ -470,6 +473,23 @@ class Option(Condition):
 
     def __ne__(self, other):
         return self._make_condition(operator.__ne__, other)
+
+    # -- private access methods
+
+    def _cast(self):
+        return self._parser._casts.get(self.argname)
+
+    def _isrequired(self):
+        return self in self._parser._required
+
+    def _getconflicts(self):
+        return self._parser._conflicts.get(self, [])
+
+    def _getreqs(self):
+        return self._parser._requires.get(self, [])
+
+    def _alias(self):
+        return self._parser._source_to_alias.get(self.argname)
 
 
 # ---------- Argument readers ---------- #
@@ -761,9 +781,40 @@ class Parser(object):
         return result
 
     def file(self, name, mode=None, buffering=None):
-        m = self.multiword(name)
-        m.cast(_FileOpenerCaster(mode, buffering))
-        return m
+        ''' Opens the file indicated by the name passed by the user. ``mode``
+        and ``buffering`` are arguments passed to ``open``.
+
+        The example below implements a file copy operation:
+
+        >>> with Parser(locals()) as p:
+        ...     p.file('input_file')
+        ...     p.file('output_file', mode='w')
+        ...
+        ... output_file.write(input_file.read())
+        
+        '''
+
+        return self.multiword(name).cast(_FileOpenerCaster(mode, buffering))
+
+    def directory(self, name, create=False):
+        ''' File directory value. Checks to ensure that the user passed file
+        name exists and is a directory (i.e., not some other file object). If
+        ``create`` is specified, creates the directory using ``os.makedirs``;
+        any intermediate directories are also created. '''
+
+        return self.multiword(name).cast(_DirectoryOpenerCaster(create))
+
+    def url(self, name):
+        ''' URL value; verifies that argument has a scheme (e.g., http, ftp,
+        file). '''
+
+        from urlparse import urlparse
+        def parse(value):
+            if urlparse(value).scheme == '':
+                raise FormatError('%s not valid URL' % value)
+            return value
+
+        self.str(name).cast(parse)
 
 # --- aggregate calls --- #
 
@@ -1189,54 +1240,6 @@ class Parser(object):
                 msg += ' (Requires %s)' % ', '.join(str(item) for item in reqs)
 
             self.emit(msg)
-
-
-class IOParser(Parser):
-    def directory(self, name):
-        ''' Adds a directory option, as :class:`io.Directory` object. Requires
-        directory to exist or raises exception. '''
-
-        from plyny.plio.files import Directory
-        return self._add_option(name).cast(Directory)
-
-    def file(self, name):
-        ''' Adds a :class:`io.File` option. '''
-        from plyny.plio.files import open_path
-        return self._add_option(name).cast(open_path)
-
-    def input_file(self, name):
-        ''' Adds an input file option, as :class:`io.File` object. Requires
-        file to exist or raises exception. '''
-
-        from plyny.plio.files import open_path
-
-        def opener(x):
-            try:
-                f = open_path(x, True)
-#            f.set_locked(True)
-            except Exception as e:
-                print(e)
-            return f
-
-        result = self._add_option(name).cast(opener)
-        self._set_reader(name, _MultiWordArgumentReader)
-        return result
-
-    def output_file(self, name, disable_overwrite=True):
-        ''' Adds an output file option, as :class:`io.FileWriter` object.
-        Prevents the overwriting of the file.  '''
-
-        from plyny.plio.files import stdio, FileWriter
-
-        name = self._localize(name)
-
-        def opener(x):
-            if x == '-':
-                return stdio()
-            else:
-                return FileWriter(x, not disable_overwrite)
-
-        return self._add_option(name).cast(opener)
 
 
 __all__ = ['Parser']
