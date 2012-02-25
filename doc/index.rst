@@ -122,7 +122,6 @@ Specifying arguments
 ...    # complex types
 ...    p.range('range_arg')     # --range_arg 1:2
 ...    p.multiword('multi_arg') # --multi_arg hello world
-.. ...    p.enum('enum_arg')       # 
 ...    p.file('file_arg')       # --file_arg README.txt
 ...    p.directory('dir_arg')   # --dir_arg /tmp/
 
