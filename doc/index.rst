@@ -233,7 +233,7 @@ Now the value of arg1 is ``['hello', 'world']``.
 Note: by indicating ``multiple``, the variable is stored as a ``list`` *even* if only
 one instance is specified by the user.
 
-Indicating default values
+Indicating default values or environment variables
 -------------------------
 
 A default value means the argument will receive the value if not specified.
@@ -247,6 +247,23 @@ Both executions are equivalent:
 
   python test.py --arg1 hello
   python test.py
+
+Additionally, we can specify that an argument should be drawn from the OS/shell
+environment if not provided at the command line:
+
+>>> with Parser(locals()) as p:
+...    p.str('port').environment()
+
+Now the following shell interactions are equivalent:
+
+::
+
+    python test.py --port 5000
+    export PORT=5000; python test.py
+
+Currently, this works by setting the default value to the environment value.
+Consequently, the `default` and `environment` arguments currently conflict (or,
+specifically, *override* one another).
 
 Allowing no argument label
 --------------------------

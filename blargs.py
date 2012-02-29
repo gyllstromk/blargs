@@ -436,6 +436,39 @@ class Option(Condition):
         self._parser._set_default(self.argname, value)
         return self
 
+    def environment(self):
+        ''' Pull argument value from OS environment if unspecified. The case of
+        the argument name, all lower, and all upper are all tried. For example,
+        if the argument name is `Port`, the following names will be used for
+        environment lookups: `Port`, `port`, `PORT`.
+
+        >>> with Parser(locals()) as p:
+        ...    p.int('port').environment()
+        
+        Both command lines work:
+
+        ::
+
+            python test.py --port 5000
+            export PORT=5000; python test.py
+
+        '''
+
+        default = os.environ.get(self.argname)
+        if default is None:
+            default = os.environ.get(self.argname.lower())
+
+            if default is None:
+                default = os.environ.get(self.argname.upper())
+
+        if default is not None:
+            return self.default(default)
+
+        return self
+
+    def name(self):
+        return self.argname
+
     def cast(self, cast):
         ''' Provide a casting value for this argument. '''
         self._parser._casts[self.argname] = cast
@@ -1060,10 +1093,21 @@ class Parser(object):
             if key in parsed:
                 continue
 
+            cast = self._casts.get(key)
+            cast = cast if cast else lambda x: x
+
             if key in self._defaults:
-                assigned[key] = self._defaults[key]
+                value = self._defaults[key]
             else:
-                assigned[key] = value.default()
+                value = value.default()
+
+            if value is not None:
+                try:
+                    value = cast(value)
+                except ValueError as e:
+                    raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
+
+            assigned[key] = value
 
         return assigned
 

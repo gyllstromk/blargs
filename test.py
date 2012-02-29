@@ -104,6 +104,26 @@ class FileBasedTestCase(unittest.TestCase):
 
 
 class TestCase(unittest.TestCase):
+    def test_env(self):
+        import os
+
+        os.environ['PORT'] = 'yes'
+        p = Parser()
+        p.int('port').environment()
+
+        self.assertRaises(FormatError, p._process_command_line)
+
+        os.environ['PORT'] = '9999'
+
+        for port in ('Port', 'pORt', 'port', 'PORT'):
+            p = Parser()
+            p.int(port).environment()
+            vals = p._process_command_line()
+            self.assertEqual(vals[port], 9999)
+
+            vals = p._process_command_line(['--%s' % port, '2222'])
+            self.assertEqual(vals[port], 2222)
+
     def test_error_printing(self):
         def create(strio):
             with Parser(locals()) as p:
@@ -622,6 +642,10 @@ usage: {0}
         vals = p._process_command_line(['--x', '1.2 9.8 4.6'])
         self.assertEqual(vals['x'], [1.2, 9.8000000000000007,
             4.5999999999999996])
+
+        p = Parser()
+        p.int('x').default('yes')
+        self.assertRaises(FormatError, p._process_command_line)
 
     def test_required(self):
         p = Parser()
