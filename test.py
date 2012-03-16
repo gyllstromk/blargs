@@ -60,6 +60,68 @@ class FileBasedTestCase(unittest.TestCase):
         import shutil
         shutil.rmtree(self._dir)
 
+    def test_config(self):
+        p = Parser({})
+        p.config('a')
+        self.assertRaises(IOError, p._process_command_line, ['--a', 'doesnotexist.cfg'])
+        fname = os.path.join(self._dir, 'config.cfg')
+        with open(fname, 'w') as w:
+            w.write('''
+[myconfig]
+b = 3
+c = 'hello' ''')
+
+        vals = p._process_command_line(['--a', fname])
+        self.assertEqual(list(vals.keys()), ['help'])
+
+        with open(fname, 'w') as w:
+            w.write('''
+[myconfig]
+b = 3
+c = 'hello'
+d = '5'
+''')
+
+        p = Parser({})
+        p.config('a')
+        p.int('b')
+        p.str('c')
+        p.int('d')
+
+        self.assertRaises(FormatError, p._process_command_line, ['--a', fname])
+
+        def write_config(**kw):
+            with open(fname, 'w') as w:
+                w.write('[myconfig]\n' + '\n'.join(('%s = %s' % (k, v) for k, v
+                    in kw.items())))
+
+        write_config(b=3, c='hello', d=5)
+
+        vals = p._process_command_line(['--a', fname])
+        self.assertEqual(vals['b'], 3)
+        self.assertEqual(vals['c'], 'hello')
+        self.assertEqual(vals['d'], 5)
+
+        vals = p._process_command_line(['--a', fname, '--d', '4'])
+        self.assertEqual(vals['b'], 3)
+        self.assertEqual(vals['c'], 'hello')
+        self.assertEqual(vals['d'], 4)
+
+        vals = p._process_command_line(['--a', fname, '--d', '4', '--c', 'sup',
+            '--b', '1'])
+
+        self.assertEqual(vals['b'], 1)
+        self.assertEqual(vals['c'], 'sup')
+        self.assertEqual(vals['d'], 4)
+
+        p = Parser({})
+        p.config('a')
+        p.int('b').requires(p.int('d'))
+        p.str('c')
+        write_config(b=3, c='sup')
+        self.assertRaises(DependencyError, p._process_command_line, ['--a',
+            fname])
+
     def test_file(self):
         p = Parser(locals())
         p.file('a')
@@ -218,8 +280,6 @@ usage: {0}
                 p.flag('f'),
             ),
         )
-
-#        g = p.at_least_one(p.int('x'), p.int('y'))
 
         satisfies1 = (['--a', '--c'], ['--b', '--c'])
         self.assertRaises(DependencyError, p._process_command_line, ['--a'])
@@ -434,17 +494,6 @@ usage: {0}
             p._process_command_line([])
         except TypeError:
             self.fail()
-
-#    def test_enum(self):
-#        p = Parser()
-#        default = '1'
-#        p.enum('a', ['1', '2', 'b']).default(default)
-#        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', 'c'])
-#        self.assertRaises(InvalidEnumValueError, p._process_command_line, ['--a', '9'])
-#        for arg in ('1', '2', 'b'):
-#            self.assertEqual(p._process_command_line(['--a', arg])['a'], arg)
-#
-#        self.assertEqual(p._process_command_line([])['a'], default)
 
     def test_condition(self):
         p = Parser()
@@ -817,7 +866,6 @@ usage: {0}
         create()._process_command_line(['--x', '1', '--z', '1'])
         create()._process_command_line(['--y', '1', '--z', '1'])
         self.assertRaises(ArgumentError, create()._process_command_line, [])
-
 
     def test_one_required(self):
         def create():

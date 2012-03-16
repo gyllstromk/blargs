@@ -42,14 +42,25 @@ if sys.version_info[0] == 3:
     isstring = lambda x: isinstance(x, str)
     from urllib.parse import urlparse
     xrange = range
+    import configparser as cpars
 else:
     iterkeys = lambda x: x.iterkeys()
     iteritems = lambda x: x.iteritems()
     isstring = lambda x: isinstance(x, basestring)
     from urlparse import urlparse
+    import ConfigParser as cpars
 
 #iterkeys
 #def iterkeys(
+
+
+def _ConfigCaster(f):
+    cfp = cpars.ConfigParser()
+    cfp.readfp(open(f))
+    for sec in cfp.sections():
+        for key, value in cfp.items(sec):
+            yield key, value
+
 
 def _RangeCaster(value):
     def raise_error():
@@ -562,8 +573,14 @@ class Option(Condition):
 
 
 class _ArgumentReader(object):
+    class _UNSPECIFIED(object):
+        def __repr__(self):
+            return 'UNSPECIFIED'
+
+    UNSPECIFIED = _UNSPECIFIED()
+
     def __init__(self, parent):
-        self.value = None
+        self.value = _ArgumentReader.UNSPECIFIED
         self.parent = parent
         self._init()
 
@@ -575,7 +592,7 @@ class _ArgumentReader(object):
 
     @classmethod
     def default(cls):
-        return None
+        return _ArgumentReader.UNSPECIFIED
 
 
 class _MultiWordArgumentReader(_ArgumentReader):
@@ -612,17 +629,18 @@ class _FlagArgumentReader(_ArgumentReader):
 
 class _SingleWordReader(_ArgumentReader):
     def _init(self):
-        self.value = None
+        pass
 
     def consume_or_skip(self, arg):
-        if self.value is not None:
+        if self.value is not _ArgumentReader.UNSPECIFIED:
+
             return False
 
         self.value = arg
         return True
 
     def get(self):
-        if self.value is None:
+        if self.value is _ArgumentReader.UNSPECIFIED:
             raise MissingValueError
         return self.value
 
@@ -761,7 +779,50 @@ class Parser(object):
 # --- types --- #
 
     def config(self, name):
-        return self._add_option(name).cast(Config)
+        ''' Add configuration file, whose key/value pairs will provide/replace
+        any arguments created for this parser. For example:
+
+            >>> with Parser() as p:
+            ...   p.int('a')
+            ...   p.str('b')
+            ...   p.config('conf')
+
+            Now, arg ``a`` can be specfied on the command line, or in the
+            configuration file passed to ``conf``.  For example:
+
+            ::
+            
+                python test.py --a 3
+                python test.py --conf myconfig.cfg
+
+            Where myconfig.cfg:
+
+            ::
+
+                [myconfigfile]
+                a = 5
+                b = 9
+                x = 'hello'
+
+            Note that any parameters in the config that aren't created as
+            arguments via this parser are ignored. In the example above, the
+            values of variables ``a`` and ``b`` would be assigned, while ``x``
+            would be ignored (as the developer did not create an ``x``
+            argument).
+
+            If anything is specified on the command line, its value is not
+            taken from the config file. For example:
+
+            ::
+            
+                python test.py --a 3 --config myconfig.cfg
+
+            In this case, the value of ``a`` is 3 (from the command line) and
+            not 5 (from the config file).
+
+            '''
+
+        return self.str(name).cast(_ConfigCaster)
 
     def int(self, name):
         ''' Add integer argument. '''
@@ -1058,37 +1119,8 @@ class Parser(object):
             self.print_help()
             sys.exit(0)
 
-    def _assign(self, parsed):
+    def _assign_defaults(self, parsed):
         assigned = {}
-        for key, values in iteritems(parsed):
-            try:
-                if key not in self._multiple:
-                    value = values[0].get()
-                else:
-                    value = [v.get() for v in values]
-
-                cast = self._casts.get(key)
-                if cast:
-                    try:
-                        if isinstance(value, list):
-                            newv = []
-                            values = value
-                            for value in values:
-                                newv.append(cast(value))
-                            value = newv
-                        else:
-                            value = cast(value)
-                    except FormatError:
-                        raise
-                    except ValueError as e:
-                        raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
-
-                assigned[key] = value
-            except MissingValueError:
-                raise MissingValueError('%s specified but missing given value'
-                        % key)
-
-        # assign defaults
         for key, value in iteritems(self._readers):
             if key in parsed:
                 continue
@@ -1101,9 +1133,63 @@ class Parser(object):
             else:
                 value = value.default()
 
-            if value is not None:
+            assigned[key] = value
+
+        return assigned
+
+    def _assign_configs(self, parsed, valid_args):
+        argvalues = {}
+        for key, values in iteritems(parsed):
+            cast = self._casts.get(key)
+            if cast and cast == _ConfigCaster:
+                value = values[0].get()
+                for k, v in cast(value):
+                    if k in valid_args:
+                        argvalues[k] = v
+
+        return argvalues
+
+    def _assign(self, parsed):
+        argvalues = {}
+        argvalues.update(self._assign_defaults(parsed))
+        argvalues.update(self._assign_configs(parsed, set(argvalues.keys())))
+
+        for key, values in iteritems(parsed):
+            try:
+                if key not in self._multiple:
+                    value = values[0].get()
+                else:
+                    value = [v.get() for v in values]
+
+                if value is _ArgumentReader.UNSPECIFIED:
+                    continue
+
+                argvalues[key] = value
+
+            except MissingValueError:
+                raise MissingValueError('%s specified but missing given value'
+                        % key)
+
+        assigned = {}
+        for key, value in iteritems(argvalues):
+            cast = self._casts.get(key)
+            if value is _ArgumentReader.UNSPECIFIED:
+                value = None
+            elif cast:
+                if cast == _ConfigCaster:
+                    continue
+
                 try:
-                    value = cast(value)
+                    if isinstance(value, list):
+                        newv = []
+                        values = value
+                        for value in values:
+                            newv.append(cast(value))
+                        value = newv
+                    else:
+                        value = cast(value)
+                except FormatError:
+                    raise
                 except ValueError as e:
                     raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
 
@@ -1312,4 +1398,4 @@ class Parser(object):
 
 
 __all__ = ['Parser']
-__version__ = '0.2.21a'
+__version__ = '0.2.20a'
