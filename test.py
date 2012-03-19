@@ -234,7 +234,8 @@ usage: {0}
 
     def test_url(self):
         p = Parser()
-        p.url('url')
+        p.url('url').required()
+        self.assertRaises(MissingRequiredArgumentError, p._process_command_line)
         vals = p._process_command_line(['--url', 'http://www.com'])
 
         p = Parser()
