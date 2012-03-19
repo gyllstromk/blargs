@@ -987,7 +987,7 @@ class Parser(object):
                 raise FormatError('%s not valid URL' % value)
             return value
 
-        self.str(name).cast(parse)
+        return self.str(name).cast(parse)
 
 # --- aggregate calls --- #
 
