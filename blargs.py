@@ -1,31 +1,13 @@
-#  Copyright (c) 2011, Karl Gyllstrom
-#  All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#
-#  1. Redistributions of source code must retain the above copyright notice,
-#     this list of conditions and the following disclaimer.
-#
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions and the following disclaimer in the documentation
-#     and/or other materials provided with the distribution.
-#
-#     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
-#     IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
-#     THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-#     PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-#     CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-#     EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-#     PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-#     PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-#     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-#     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-#     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-#     The views and conclusions contained in the software and documentation are
-#     those of the authors and should not be interpreted as representing
-#     official policies, either expressed or implied, of the FreeBSD Project.
+'''
+
+    blargs command line parser
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Easy argument parsing with powerful dependency support.
+    :copyright: (c) 2012 by Karl Gyllstrom
+    :license: BSD (see LICENSE.txt)
+
+'''
 
 from __future__ import print_function
 
@@ -49,9 +31,6 @@ else:
     isstring = lambda x: isinstance(x, basestring)
     from urlparse import urlparse
     import ConfigParser as cpars
-
-#iterkeys
-#def iterkeys(
 
 
 def _ConfigCaster(f):
@@ -359,7 +338,7 @@ class CallableCondition(Condition):
         newargs = []
         for arg in (self._main, self._other):
             if isinstance(arg, Option):
-                newargs.append(parsed.get(arg.argname))
+                newargs.append(parsed.get(arg.argname).getvalue())
             else:
                 newargs.append(arg)
 
@@ -482,7 +461,10 @@ class Option(Condition):
 
     def cast(self, cast):
         ''' Provide a casting value for this argument. '''
-        self._parser._casts[self.argname] = cast
+
+        self._parser._readers[self.argname] = Caster(
+                self._parser._readers[self.argname], cast)
+
         return self
 
     def required(self):
@@ -518,7 +500,8 @@ class Option(Condition):
 
     def _inner_satisfied(self, parsed):
         v = parsed.get(self.argname)
-        return v is not None and v != False
+
+        return v.is_resolvable()
 
     def _make_condition(self, func, other):
         return CallableCondition(func, self, other)
@@ -582,67 +565,118 @@ class _ArgumentReader(object):
     def __init__(self, parent):
         self.value = _ArgumentReader.UNSPECIFIED
         self.parent = parent
+        self._default = _ArgumentReader.UNSPECIFIED
         self._init()
 
-    def consume_or_skip(self, arg):
-        raise NotImplementedError()
-
     def _init(self):
-        raise NotImplementedError()
+        pass
+
+    def _set_default(self, default):
+        self._default = default
+
+    def consume_or_skip(self, arg):
+        raise NotImplementedError
+
+    def is_specified(self):
+        return self.value is not _ArgumentReader.UNSPECIFIED
+
+    def is_resolvable(self):
+        return (self.is_specified() or self._default is not
+                _ArgumentReader.UNSPECIFIED)
+
+    def default(self):
+        if self._default is not _ArgumentReader.UNSPECIFIED:
+            return self._default
+        return self.__class__.class_default()
 
     @classmethod
-    def default(cls):
+    def class_default(cls):
         return _ArgumentReader.UNSPECIFIED
+
+    def _get(self):
+        raise NotImplementedError
+
+    def getvalue(self):
+        if self.is_specified():
+            return self._get()
+
+        return self.default()
 
 
 class _MultiWordArgumentReader(_ArgumentReader):
-    def _init(self):
-        self.value = []
-
     def consume_or_skip(self, arg):
         if self.parent._is_argument_label(arg):
             return False
 
+        if not self.is_specified():
+            self.value = []
+
         self.value.append(arg)
         return True
 
-    def get(self):
-        if len(self.value) == 0:
+    def _get(self):
+        if not self.is_specified() or len(self.value) == 0:
+            # XXX 
             raise MissingValueError
+
         return ' '.join(self.value)
 
 
 class _FlagArgumentReader(_ArgumentReader):
     def _init(self):
-        self.value = True
+        self.value = False
 
     def consume_or_skip(self, arg):
         return False
 
-    def get(self):
+    def _get(self):
         return self.value
 
     @classmethod
-    def default(cls):
+    def class_default(cls):
         return False
 
 
 class _SingleWordReader(_ArgumentReader):
-    def _init(self):
-        pass
-
     def consume_or_skip(self, arg):
-        if self.value is not _ArgumentReader.UNSPECIFIED:
-
+        if self.is_specified():
             return False
 
         self.value = arg
         return True
 
-    def get(self):
-        if self.value is _ArgumentReader.UNSPECIFIED:
+    def _get(self):
+        if not self.is_specified():
             raise MissingValueError
         return self.value
+
+
+class Caster(object):
+    def __init__(self, reader, cast):
+        self._reader = reader
+        self._cast = cast
+
+    def getvalue(self):
+        try:
+            v = self._reader.getvalue()
+            if v is _ArgumentReader.UNSPECIFIED:
+                return None
+
+            return self._cast(v)
+        except ValueError:
+            raise FormatError
+
+    def is_resolvable(self):
+        return self._reader.is_resolvable()
+
+    def consume_or_skip(self, arg):
+        return self._reader.consume_or_skip(arg)
+
+    def is_specified(self):
+        return self._reader.is_specified()
+
+    def _set_default(self, default):
+        self._reader._set_default(default)
 
 
 # ---------- Argument readers ---------- #
@@ -686,7 +720,6 @@ class Parser(object):
         self._option_labels = {}
         self._multiple = set()
         self._casts = {}
-        self._defaults = {}
         self._extras = []
         self._unspecified_default = None
         self.require_n = {}
@@ -819,7 +852,6 @@ class Parser(object):
 
             In this case, the value of ``a`` is 3 (from the command line) and
             not 5 (from the config file).
-
             '''
 
         return self.str(name).cast(_ConfigCaster)
@@ -864,10 +896,7 @@ class Parser(object):
               python test.py --values 0 10 3  # -> xrange(0, 10, 3)
         '''
 
-
-        result = self._add_option(name).cast(_RangeCaster)
-        self._set_reader(name, _MultiWordArgumentReader)
-        return result
+        return self.multiword(name).cast(_RangeCaster)
 
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
@@ -884,7 +913,7 @@ class Parser(object):
         '''
 
         result = self._add_option(name)
-        self._set_reader(name, _MultiWordArgumentReader)
+        self._set_reader(name, _MultiWordArgumentReader(self))
         return result
 
     def bool(self, name):
@@ -897,7 +926,7 @@ class Parser(object):
         while an absence indicates false. No arguments. '''
 
         result = self._add_option(name)
-        self._set_reader(name, _FlagArgumentReader)
+        self._set_reader(name, _FlagArgumentReader(self))
         return result
 
     def file(self, name, mode=None, buffering=None):
@@ -1015,7 +1044,7 @@ class Parser(object):
         if name in self._readers:
             raise ValueError('multiple types specified for %s' % name)
 
-        self._readers[name] = _SingleWordReader
+        self._set_reader(name, _SingleWordReader(self))
 
         if argument_label is not None:
             self._option_labels[name] = argument_label
@@ -1064,14 +1093,14 @@ class Parser(object):
                 arg.startswith(self._double_prefix))
 
     def _parse(self, tokenized):
-        argument_value = None
+        current_reader = None
         parsed = {}
 
         for arg in tokenized:
-            if argument_value is not None:
-                if argument_value.consume_or_skip(arg):
+            if current_reader is not None:
+                if current_reader.consume_or_skip(arg):
                     continue
-                argument_value = None
+                current_reader = None
 
             argument_name = None
 
@@ -1088,29 +1117,45 @@ class Parser(object):
                 argument_name = self._localize(arg)
 
                 if is_full:
-                    argument_name = self._options.get(argument_name).argname
-                    argument_value = self._readers.get(argument_name)
+                    argument_name = self._options.get(argument_name)
                 else:
-                    argument_name = self._options.get(self._alias.get(argument_name)).argname
-                    argument_value = self._readers.get(argument_name)
+                    argument_name = self._options.get(self._alias.get(argument_name))
 
-                if argument_value is None:
+                if argument_name is not None:
+                    argument_name = argument_name.argname
+
+                current_reader = self._readers.get(argument_name)
+
+                if current_reader is None:
                     raise UnspecifiedArgumentError(argument_name)
-
-                argument_value = argument_value(self)
 
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
 
                 # push value onto _SingleWordReader
-                argument_value = _SingleWordReader(self)
-                argument_value.consume_or_skip(arg)
+                current_reader = _SingleWordReader(self)
+                current_reader.consume_or_skip(arg)
 
             if argument_name:
-                parsed.setdefault(argument_name,
-                        []).append(argument_value)
+                v = parsed.get(argument_name)
+                if v is not None:
+                    if not isinstance(v, list):
+                        v = [v]
+
+                    v.append(current_reader)
+                else:
+                    v = current_reader
+
+                parsed[argument_name] = v
             else:
                 self._extras.append(arg)
+
+        for k, v in iteritems(parsed):
+            if not isinstance(v, list):
+                v = [v]
+            for item in v:
+                if not item.is_specified():
+                    raise MissingValueError
 
         return parsed
 
@@ -1119,21 +1164,11 @@ class Parser(object):
             self.print_help()
             sys.exit(0)
 
-    def _assign_defaults(self, parsed):
+    def _assign_defaults(self, readers):
         assigned = {}
-        for key, value in iteritems(self._readers):
-            if key in parsed:
-                continue
-
+        for key, value in iteritems(readers):
             cast = self._casts.get(key)
             cast = cast if cast else lambda x: x
-
-            if key in self._defaults:
-                value = self._defaults[key]
-            else:
-                value = value.default()
-
-            assigned[key] = value
 
         return assigned
 
@@ -1144,62 +1179,36 @@ class Parser(object):
             if cast and cast == _ConfigCaster:
                 value = values[0].get()
                 for k, v in cast(value):
-                    if k in valid_args:
-                        argvalues[k] = v
+                    argvalues[k] = v
 
         return argvalues
 
-    def _assign(self, parsed):
-        argvalues = {}
-        argvalues.update(self._assign_defaults(parsed))
-        argvalues.update(self._assign_configs(parsed, set(argvalues.keys())))
+    def _assign(self, combined):
+#        argvalues = {}
+#        argvalues.update(self._assign_configs(parsed, set(argvalues.keys())))
 
-        for key, values in iteritems(parsed):
+        assigned = {}
+        for key, values in iteritems(combined):
             try:
                 if key not in self._multiple:
-                    value = values[0].get()
+                    value = values.getvalue()
                 else:
-                    value = [v.get() for v in values]
+                    value = [v.getvalue() for v in values]
 
                 if value is _ArgumentReader.UNSPECIFIED:
-                    continue
+                    value = None
 
-                argvalues[key] = value
+                assigned[key] = value
 
             except MissingValueError:
                 raise MissingValueError('%s specified but missing given value'
                         % key)
 
-        assigned = {}
-        for key, value in iteritems(argvalues):
-            cast = self._casts.get(key)
-            if value is _ArgumentReader.UNSPECIFIED:
-                value = None
-            elif cast:
-                if cast == _ConfigCaster:
-                    continue
-
-                try:
-                    if isinstance(value, list):
-                        newv = []
-                        values = value
-                        for value in values:
-                            newv.append(cast(value))
-                        value = newv
-                    else:
-                        value = cast(value)
-                except FormatError:
-                    raise
-                except ValueError as e:
-                    raise FormatError('Cannot cast \'%s\' to %s' % (value, cast))
-
-            assigned[key] = value
-
         return assigned
 
     def _check_multiple(self, assigned):
         for key, values in iteritems(assigned):
-            if len(values) > 1 and key not in self._multiple:
+            if isinstance(values, list) and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
 
@@ -1268,15 +1277,22 @@ class Parser(object):
 
         return args
 
+    def _combine_with_defaults(self, user_args):
+        copy = self._readers.copy()
+        for k, v in iteritems(user_args):
+            copy[k] = v
+        return copy
+
     def _process_command_line(self, args=None):
         try:
             args = self._get_args(args)
             tokenized = self._tokenize(args)
-            parsed = self._parse(tokenized)
-            self._help_if_necessary(parsed)
-            self._check_multiple(parsed)
-            assigned = self._assign(parsed)
-            self._verify(assigned)
+            user_args = self._parse(tokenized)
+            self._help_if_necessary(user_args)
+            self._check_multiple(user_args)
+            combined = self._combine_with_defaults(user_args)
+            self._verify(combined)
+            assigned = self._assign(combined)
             self._assign_to_store(assigned)
         except ArgumentError as e:
             raise e
@@ -1312,7 +1328,8 @@ class Parser(object):
     @localize
     @_options_to_names
     def _set_default(self, name, value):
-        self._defaults[name] = value
+        self._readers[name]._set_default(value)
+    #    self._defaults[name] = value
 
     @_localize_all
     @_verify_args_exist
