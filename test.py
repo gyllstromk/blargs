@@ -490,6 +490,15 @@ usage: {0}
         self.assertRaises(DependencyError, create()._process_command_line, specify('d', 'b'))
         create()._process_command_line(specify('d', 'a', 'b'))
 
+        # self conditions
+        def create():
+            p = Parser()
+            p.str('a').requires(p['a'] != 'c')
+            return p
+
+        create()._process_command_line(['--a', '1'])
+        self.assertRaises(ConditionError, create()._process_command_line, ['--a', 'c'])
+
     def test_redundant(self):
         try:
             with Parser() as p:
@@ -563,17 +572,6 @@ usage: {0}
             p._process_command_line([])
         except TypeError:
             self.fail()
-
-    def x_test_condition(self):
-        def create():
-            p = Parser()
-            p.str('a').condition(lambda x: x['b'] != 'c')
-            p.str('b')
-            return p
-
-        create()._process_command_line(['--a', '1', '--b', 'b'])
-        self.assertRaises(FailedConditionError, create()._process_command_line,
-                ['--a', '1', '--b', 'c'])
 
     def test_localize(self):
         p = Parser.with_locals()
@@ -661,11 +659,14 @@ usage: {0}
         self.assertRaises(MultipleSpecifiedArgumentError,
                 p._process_command_line, ['--x', '1', '--x', '2'])
 
-        p = Parser()
-        x = p.str('x').multiple()
-        self.assertTrue(x != None)
+        def create():
+            p = Parser()
+            x = p.str('x').multiple()
+            self.assertTrue(x != None)
+            return p
 
-        p._process_command_line(['--x', '1', '--x', '2'])
+        create()._process_command_line(['--x', '1', '--x', '2'])
+        create()._process_command_line(['--x', '1'])
 
     def test_unspecified_default(self):
         p = Parser({})
@@ -830,6 +831,29 @@ usage: {0}
     def test_unspecified(self):
         p = Parser()
         self.assertRaises(UnspecifiedArgumentError, p._process_command_line, ['--b'])
+
+    def test_enum(self):
+        def create():
+            p = Parser()
+            p.enum('x', ('a', 'b', 'c'))
+            return p
+
+        create()._process_command_line()
+        self.assertRaises(ConditionError, create()._process_command_line, ['--x', '3'])
+        self.assertRaises(ConditionError, create()._process_command_line, ['--x', 'ab'])
+        self.assertRaises(ConditionError, create()._process_command_line, ['--x', '9'])
+        create()._process_command_line(['--x', 'a'])
+        create()._process_command_line(['--x', 'b'])
+        create()._process_command_line(['--x', 'c'])
+
+        def create():
+            p = Parser()
+            p.enum('x', ('a', 'b', 'c')).multiple()
+            return p
+
+        create()._process_command_line(['--x', 'a', '--x', 'b'])
+        create()._process_command_line(['--x', 'b'])
+        create()._process_command_line(['--x', 'c'])
 
     def test_int(self):
         def create():

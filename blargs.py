@@ -226,7 +226,8 @@ class UnspecifiedArgumentError(ArgumentError):
     ''' User supplies argument that isn't specified. '''
 
     def __init__(self, arg):
-        super(UnspecifiedArgumentError, self).__init__('illegal option %s' % arg)
+        super(UnspecifiedArgumentError, self).__init__('illegal option %s' %
+                arg)
 
 
 class MultipleSpecifiedArgumentError(ArgumentError):
@@ -335,14 +336,25 @@ class CallableCondition(Condition):
         return c
 
     def _inner_satisfied(self, parsed):
-        newargs = []
-        for arg in (self._main, self._other):
-            if isinstance(arg, Option):
-                newargs.append(parsed.get(arg.argname).getvalue())
+        operands = []
+        for item in (self._main, self._other):
+            if isinstance(item, Option):
+                v = parsed.get(item.argname)
+                if isinstance(v, list):
+                    v = [vi.getvalue() for vi in v]
+                else:
+                    v = [v.getvalue()]
             else:
-                newargs.append(arg)
+                v = [item]
 
-        return self._call(*newargs)
+            operands.append(v)
+
+        for x1 in operands[0]:
+            for x2 in operands[1]:
+                if not self._call(x1, x2):
+                    return False
+
+        return True
 
     def __repr__(self):
         x = self._main.argname
@@ -381,7 +393,7 @@ class Option(Condition):
         ''' Specifiy other options/conditions which this argument requires.
 
         :param conditions: required conditions
-        :type others: sequence of either :class:`Option` or :class:`Condition`s 
+        :type others: sequence of either :class:`Option` or :class:`Condition`s
         '''
         [self._parser._set_requires(self.argname, x) for x in conditions]
         return self
@@ -394,7 +406,8 @@ class Option(Condition):
         ''' Specifiy other conditions which this argument conflicts with.
 
         :param conditions: conflicting options/conditions
-        :type conditions: sequence of either :class:`Option` or :class:`Condition`
+        :type conditions: sequence of either :class:`Option` or
+            :class:`Condition`
         '''
         [self._parser._set_conflicts(self.argname, x) for x in conditions]
         return self
@@ -434,7 +447,7 @@ class Option(Condition):
 
         >>> with Parser(locals()) as p:
         ...    p.int('port').environment()
-        
+
         Both command lines work:
 
         ::
@@ -501,7 +514,10 @@ class Option(Condition):
     def _inner_satisfied(self, parsed):
         v = parsed.get(self.argname)
 
-        return v.is_resolvable()
+        if not isinstance(v, list):
+            v = [v]
+
+        return all(x.is_resolvable() for x in v)
 
     def _make_condition(self, func, other):
         return CallableCondition(func, self, other)
@@ -616,7 +632,7 @@ class _MultiWordArgumentReader(_ArgumentReader):
 
     def _get(self):
         if not self.is_specified() or len(self.value) == 0:
-            # XXX 
+            # XXX
             raise MissingValueError
 
         return ' '.join(self.value)
@@ -784,7 +800,9 @@ class Parser(object):
         (e.g., -a). '''
 
         if self._double_prefix in flag:
-            raise ValueError('single_prefix cannot be superset of double_prefix')
+            raise ValueError(
+                    'single_prefix cannot be superset of double_prefix')
+
         self._single_prefix = flag
         return self
 
@@ -824,7 +842,7 @@ class Parser(object):
             configuration file passed to ``conf``.  For example:
 
             ::
-            
+
                 python test.py --a 3
                 python test.py --conf myconfig.cfg
 
@@ -847,7 +865,7 @@ class Parser(object):
             taken from the config file. For example:
 
             ::
-            
+
                 python test.py --a 3 --config myconfig.cfg
 
             In this case, the value of ``a`` is 3 (from the command line) and
@@ -855,6 +873,14 @@ class Parser(object):
             '''
 
         return self.str(name).cast(_ConfigCaster)
+
+    def enum(self, name, values):
+        arg = self.str(name)
+        cond = arg == values[0]
+        for v in values[1:]:
+            cond = cond.or_(arg == v)
+
+        return arg.requires(cond)
 
     def int(self, name):
         ''' Add integer argument. '''
@@ -940,7 +966,6 @@ class Parser(object):
         ...     p.file('output_file', mode='w')
         ...
         ... output_file.write(input_file.read())
-        
         '''
 
         return self.multiword(name).cast(_FileOpenerCaster(mode, buffering))
@@ -1119,7 +1144,8 @@ class Parser(object):
                 if is_full:
                     argument_name = self._options.get(argument_name)
                 else:
-                    argument_name = self._options.get(self._alias.get(argument_name))
+                    argument_name = self._options.get(
+                            self._alias.get(argument_name))
 
                 if argument_name is not None:
                     argument_name = argument_name.argname
@@ -1212,12 +1238,6 @@ class Parser(object):
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
 
-    def _check_conditions(self, assigned):
-        for arg in iterkeys(assigned):
-            for cond in self._options[arg]._conditions:
-                if not cond(assigned):
-                    raise FailedConditionError()
-
     def _check_required(self, assigned):
         for arg, replacements in iteritems(self._required):
             missing = []
@@ -1254,7 +1274,6 @@ class Parser(object):
                         raise ConflictError(arg.argname, conflict.argname)
 
     def _verify(self, assigned):
-        self._check_conditions(assigned)
         self._check_required(assigned)
         self._check_dependencies(assigned)
         self._check_conflicts(assigned)
@@ -1314,7 +1333,9 @@ class Parser(object):
         msg = []
         msg.append('Error: ' + str(e))
         msg.append('usage: %s' % sys.argv[0])
-        msg.append(' '.join('[%s]' % self._label(value) for value in self._options.values()))
+        msg.append(' '.join('[%s]' % self._label(value) for value in
+            self._options.values()))
+
         self.emit('\n'.join(msg))
         if self._suppress_sys_exit:
             raise FakeSystemExit
@@ -1405,7 +1426,8 @@ class Parser(object):
 
             conflicts = value._getconflicts()
             if conflicts:
-                msg += ' (Conflicts with %s)' % ', '.join(str(item) for item in conflicts)
+                msg += ' (Conflicts with %s)' % ', '.join(str(item) for item in
+                        conflicts)
 
             reqs = value._getreqs()
             if reqs:
