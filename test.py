@@ -65,22 +65,22 @@ class FileBasedTestCase(unittest.TestCase):
         p.config('a')
         self.assertRaises(IOError, p._process_command_line, ['--a', 'doesnotexist.cfg'])
         fname = os.path.join(self._dir, 'config.cfg')
-        with open(fname, 'w') as w:
-            w.write('''
-[myconfig]
-b = 3
-c = 'hello' ''')
+
+        def write_config(**kw):
+            delim = '='
+            if 'delim' in kw:
+                delim = kw['delim']
+                del kw['delim']
+            with open(fname, 'w') as w:
+                w.write('[myconfig]\n# comment1\n; comment2\n' + '\n'.join(
+                    ('%s %s %s' % (k, delim, v) for k, v in kw.items())))
+
+        write_config(b=3, c='hello')
 
         vals = p._process_command_line(['--a', fname])
         self.assertEqual(list(vals.keys()), ['help'])
 
-        with open(fname, 'w') as w:
-            w.write('''
-[myconfig]
-b = 3
-c = 'hello'
-d = '5'
-''')
+        write_config(b=3, c='hello', d='what')
 
         p = Parser({})
         p.config('a')
@@ -89,11 +89,6 @@ d = '5'
         p.int('d')
 
         self.assertRaises(FormatError, p._process_command_line, ['--a', fname])
-
-        def write_config(**kw):
-            with open(fname, 'w') as w:
-                w.write('[myconfig]\n' + '\n'.join(('%s = %s' % (k, v) for k, v
-                    in kw.items())))
 
         write_config(b=3, c='hello', d=5)
 
@@ -121,6 +116,14 @@ d = '5'
         write_config(b=3, c='sup')
         self.assertRaises(DependencyError, p._process_command_line, ['--a',
             fname])
+
+        write_config(b=3, c='sup', delim=':')
+        vals = p._process_command_line(['--a', fname, '--d', '4', '--c', 'sup',
+            '--b', '1'])
+
+        self.assertEqual(vals['b'], 1)
+        self.assertEqual(vals['c'], 'sup')
+        self.assertEqual(vals['d'], 4)
 
     def test_file(self):
         p = Parser(locals())
