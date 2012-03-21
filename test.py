@@ -64,7 +64,7 @@ class FileBasedTestCase(unittest.TestCase):
         import shutil
         shutil.rmtree(self._dir)
 
-    def x_test_config(self):
+    def test_config(self):
         def create():
             p = Parser()
             p.config('a')
@@ -205,7 +205,7 @@ class TestCase(unittest.TestCase):
             vals = p._process_command_line(['--%s' % port, '2222'])
             self.assertEqual(vals[port], 2222)
 
-    def x_test_error_printing(self):
+    def test_error_printing(self):
         def create(strio):
             with Parser(locals()) as p:
                 p._out = strio
@@ -662,12 +662,17 @@ usage: {0}
 
         def create():
             p = Parser()
-            x = p.str('x').multiple()
+            x = p.int('x').multiple()
             self.assertTrue(x != None)
             return p
 
-        create()._process_command_line(['--x', '1', '--x', '2'])
-        create()._process_command_line(['--x', '1'])
+        vals = create()._process_command_line(['--x', '1', '--x', '2'])
+        self.assertEqual(sorted(vals['x']), [1, 2])
+        vals = create()._process_command_line(['--x', '1'])
+        self.assertEqual(vals['x'], [1])
+        vals = create()._process_command_line([])
+        self.assertEqual(vals['x'], [None])
+        self.assertRaises(FormatError, create()._process_command_line, ['--x', '1', '--x', 'hello'])
 
     def test_unspecified_default(self):
         p = Parser({})
@@ -852,9 +857,11 @@ usage: {0}
             p.enum('x', ('a', 'b', 'c')).multiple()
             return p
 
-        create()._process_command_line(['--x', 'a', '--x', 'b'])
+#        XXX create()._process_command_line(['--x', 'a', '--x', 'b'])
         create()._process_command_line(['--x', 'b'])
         create()._process_command_line(['--x', 'c'])
+        self.assertRaises(ConditionError, create()._process_command_line, ['--x', 'c', '--x', '3'])
+        self.assertRaises(ConditionError, create()._process_command_line, ['--x', '3', '--x', 'c'])
 
     def test_int(self):
         def create():
@@ -881,6 +888,14 @@ usage: {0}
         p = Parser()
         p.flag('x')
         vals = p._process_command_line(['--x'])
+        self.assertTrue(vals['x'])
+
+    def test_flag2(self):
+        p = Parser()
+        p.flag('x').requires(p.int('y'))
+
+        p._process_command_line()
+        self.assertRaises(DependencyError, p._process_command_line, ['--x'])
 
     def test_missing(self):
         p = Parser()
@@ -979,7 +994,7 @@ usage: {0}
         p.flag('y').conflicts('x')
         self.assertRaises(ConflictError, p._process_command_line, ['--y', '--x'])
 
-#    def x_test_index(self):
+#    def test_index(self):
 #        p = Parser()
 #        p.str('x')
 #        self.assertEqual(p['y'], None)

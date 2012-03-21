@@ -395,11 +395,8 @@ class Option(Condition):
         :param conditions: required conditions
         :type others: sequence of either :class:`Option` or :class:`Condition`s
         '''
-        [self._parser._set_requires(self.argname, x) for x in conditions]
-        return self
 
-    def condition(self, func):
-        self._conditions.append(func)
+        [self._parser._set_requires(self.argname, x) for x in conditions]
         return self
 
     def conflicts(self, *conditions):
@@ -409,6 +406,7 @@ class Option(Condition):
         :type conditions: sequence of either :class:`Option` or
             :class:`Condition`
         '''
+
         [self._parser._set_conflicts(self.argname, x) for x in conditions]
         return self
 
@@ -506,6 +504,16 @@ class Option(Condition):
 
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
+
+#         for c in self._getconflicts():
+#             print(type(c))
+
+#         for c in self._getreqs():
+#             if isinstance(c, CallableCondition):
+#                 if isinstance(c._other, Option):
+#                     print('ss', c._other)
+#                     print(self._parser._multiple.get(c._other.argname))
+
         self._parser._set_multiple(self.argname)
         return self
 
@@ -587,6 +595,9 @@ class _ArgumentReader(object):
     def _init(self):
         pass
 
+    def activate(self):
+        pass
+
     def _set_default(self, default):
         self._default = default
 
@@ -642,6 +653,12 @@ class _FlagArgumentReader(_ArgumentReader):
     def _init(self):
         self.value = False
 
+    def activate(self):
+        self.value = True
+
+    def is_resolvable(self):
+        return self.value
+
     def consume_or_skip(self, arg):
         return False
 
@@ -671,6 +688,9 @@ class Caster(object):
     def __init__(self, reader, cast):
         self._reader = reader
         self._cast = cast
+
+    def activate(self):
+        self._reader.activate()
 
     def getvalue(self):
         try:
@@ -1152,8 +1172,17 @@ class Parser(object):
 
                 current_reader = self._readers.get(argument_name)
 
+                if argument_name in self._multiple:
+                    if isinstance(current_reader, Caster):
+                        c = Caster(current_reader._reader.__class__(self), current_reader._cast)
+                    else:
+                        c = current_reader.__class__(self)
+                    current_reader = c
+
                 if current_reader is None:
                     raise UnspecifiedArgumentError(argument_name)
+
+                current_reader.activate()
 
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
@@ -1219,6 +1248,9 @@ class Parser(object):
                 if key not in self._multiple:
                     value = values.getvalue()
                 else:
+                    if not isinstance(values, list):
+                        values = [values]
+
                     value = [v.getvalue() for v in values]
 
                 if value is _ArgumentReader.UNSPECIFIED:
