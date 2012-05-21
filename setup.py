@@ -1,15 +1,26 @@
+"""
+Blargs!
+-------
+
+Blargs command line parser.
+"""
 import blargs
 
-from distutils.core import setup
+import os
+from setuptools import setup
 
 setup(name='blargs',
       version=blargs.__version__,
-#      version=getversion(),
-      py_modules=['blargs'],
-      description='Blargs command line parser',
+      url='https://bitbucket.org/gyllstromk/blargs',
+      license='BSD',
       author='Karl Gyllstrom',
       author_email='karl.gyllstrom+blargs@gmail.com',
-      url='https://bitbucket.org/gyllstromk/blargs',
+      description='Blargs command line parser',
+      long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
+      py_modules=['blargs'],
+      include_package_data=True,
+      platforms='any',
+      test_suite='test',
      )
 
 # deploy
