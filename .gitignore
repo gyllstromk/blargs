@@ -3,5 +3,6 @@ env/
 doc/_build
 .gitignore
 dist/
+*.swo
 *.swp
 *.pyc
