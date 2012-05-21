@@ -3,21 +3,20 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to blargs's documentation!
+blargs command line parsing
 ==================================
 
-.. image:: logo_large.png
-  :align: right
+.. .. image:: logo_large.png
+..   :align: right
 
 blargs provides easy command line parsing, as an alternative to argparse and
 optparse from Python's standard library. The main distinctions are:
 
   * Cleaner, more minimal, and possibly more `pythonic` syntax.
   * Support for arbitrarily complex dependency relationships. For example,
-    argument A might require arguments B and C, while conflicting with D; or
-    requiring argument E in the case that A is less than 10 or B is equal
+    argument ``A`` might require arguments ``B`` and ``C``, while conflicting with ``D``; or
+    requiring argument ``E`` in the case that ``A`` is less than 10 or ``B`` is equal
     to the string 'wonderful!'.
-
   * Emphasis on `ease of use` over `configurability`.
 
 Blargs has been tested on Python2.6 to Python3.2 and PyPy.
@@ -48,25 +47,30 @@ BSD
 
 .. One big example
 .. ===============
-
-.. >>> with Parser(locals()) as p:  # create argument parser, storing values to locals()
-.. ...    p.float('salary').shorthand('s').required()
-.. ...    p.str('nickname').default('No nickname')
-.. ...    age = p.int('age').shorthand('a').required()
-.. ...    p.str('parent_name').if_(age < 18)
+.. 
+.. ::
+.. 
+..     with Parser(locals()) as p:  # create argument parser, storing values to locals()
+..         p.float('salary').shorthand('s').required()
+..         p.str('nickname').default('No nickname')
+..         age = p.int('age').shorthand('a').required()
+..         p.str('parent_name').if_(age < 18)
 
 Quick start
 ===========
 
 The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
 
->>> with Parser(locals()) as p:
-...    p.int('arg1')
-...    p.str('arg2')
-...    p.flag('arg3')
-...
->>> print 'Out of with statement; sys.argv is now parsed!'
->>> print arg1, arg2, arg3
+::
+
+    with Parser(locals()) as p:
+        p.int('arg1')
+        p.str('arg2')
+        p.flag('arg3')
+
+        print 'Out of with statement; sys.argv is now parsed!'
+        print arg1, arg2, arg3
+
 
 Note the use of ``locals`` is limited to the global scope; use a dictionary otherwise, getting argument values using the argument names as keys.
 
@@ -113,30 +117,36 @@ To which the program will respond:
 Specifying arguments
 ====================
 
->>> with Parser(locals()) as p:
-...    # basic types
-...    p.str('string_arg')      # --string_arg='hello'
-...    p.int('int_arg')         # --int_arg 3
-...    p.float('float_arg')     # --float_arg 9.6
-...    p.flag('flag_arg')       # --flag_arg  (no argument passed)
-...    # complex types
-...    p.range('range_arg')     # --range_arg 1:2
-...    p.multiword('multi_arg') # --multi_arg hello world
-...    p.file('file_arg')       # --file_arg README.txt
-...    p.directory('dir_arg')   # --dir_arg /tmp/
+::
+
+    with Parser(locals()) as p:
+        # basic types
+        p.str('string_arg')      # --string_arg='hello'
+        p.int('int_arg')         # --int_arg 3
+        p.float('float_arg')     # --float_arg 9.6
+        p.flag('flag_arg')       # --flag_arg  (no argument passed)
+        # complex types
+        p.range('range_arg')     # --range_arg 1:2
+        p.multiword('multi_arg') # --multi_arg hello world
+        p.file('file_arg')       # --file_arg README.txt
+        p.directory('dir_arg')   # --dir_arg /tmp/
 
 On occasions you may need to refer to a created argument to specify
 relationships. This can be done at creation time, or by a lookup. The
 following:
 
->>> with Parser(locals()) as p:
-...     argument1 = p.str('arg1')
+::
+
+    with Parser(locals()) as p:
+        argument1 = p.str('arg1')
 
 is equivalent to:
 
->>> with Parser(locals()) as p:
-...     p.str('arg1')
-...     argument1 = p['arg1']
+::
+
+    with Parser(locals()) as p:
+        p.str('arg1')
+        argument1 = p['arg1']
 
 Note that ``argument1`` *does not* get the value of the parsed value; it
 represents the argument object itself.
@@ -149,10 +159,12 @@ Howto
 Require an argument
 -------------------
 
->>> with Parser(locals()) as p:
-...    p.str('required_arg').required()
+::
 
-If we try to not pass it:
+    with Parser(locals()) as p:
+        p.str('required_arg').required()
+
+If we try to not pass an argument for ``required_arg``:
 
 ::
 
@@ -168,8 +180,10 @@ We get the following:
 Shorthand/alias
 ---------------
 
->>> with Parser(locals()) as p:
-...    p.str('arg1').shorthand('a')
+::
+
+    with Parser(locals()) as p:
+        p.str('arg1').shorthand('a')
 
 Either is acceptable:
 
@@ -180,8 +194,10 @@ Either is acceptable:
 
 Note that we can specify any number of attributes by daisy-chaining calls. For example:
 
->>> with Parser(locals()) as p:                 # 'arg1' has 'a' as alias and
-...    p.str('arg1').shorthand('a').required()  # is also required
+::
+
+    with Parser(locals()) as p:                 # 'arg1' has 'a' as alias and
+        p.str('arg1').shorthand('a').required()  # is also required
 
 Dependencies/Conflicts
 ----------------------
@@ -190,37 +206,44 @@ Dependencies indicate that some argument is required if another one is
 specified, while conflicts indicate that two or more arguments may not be
 mutually specified.
 
->>> with Parser(locals()) as p:                 # if 'arg2' is specified,
-...    arg1 = p.str('arg1')                     # so too must be 'arg3' 
-...    p.str('arg2').requires(                  # and 'arg1'. Note: if 'arg1'
-...      p.str('arg3'),                         # is specified, this does not
-...      arg1,                                  # mean 'arg2' must be
-...    )
-...    p.str('arg4').conflicts(                 # if 'arg4' is specified, then
-...      arg1                                   # 'arg1' may not be.
-...    )
+::
+
+    with Parser(locals()) as p:     # if 'arg2' is specified,
+        arg1 = p.str('arg1')        # so too must be 'arg3' 
+        p.str('arg2').requires(     # and 'arg1'. Note: if 'arg1'
+            p.str('arg3'),          # is specified, this does not
+            arg1,                   # mean 'arg2' must be
+        )
+
+        p.str('arg4').conflicts(    # if 'arg4' is specified, then
+            arg1                    # 'arg1' may not be.
+        )
 
 A slightly more complex example:
 
->>> with Parser(locals()) as p:
-...    p.float('arg1').requires(  # if 'arg1' is specified
-...      p.int('arg2'),           # then both 'arg2'
-...      p.flag('arg3'),          # and 'arg3' must be too, however,
-...    ).conflicts(               # if it is specified,
-...      p.str('arg4'),           # then neither 'arg4'
-...      p.range('arg5')          # nor 'arg5' may be specified
-...    )
+::
+
+    with Parser(locals()) as p:
+        p.float('arg1').requires(   # if 'arg1' is specified
+            p.int('arg2'),          # then both 'arg2'
+            p.flag('arg3'),         # and 'arg3' must be too, however,
+        ).conflicts(                # if it is specified,
+            p.str('arg4'),          # then neither 'arg4'
+            p.range('arg5')         # nor 'arg5' may be specified
+        )
 
 Allowing Duplicates/Multiple
--------------------
+----------------------------
 
 Normally an argument may only be specified once by the user. This can be changed:
 
->>> with Parser(locals()) as p:
-...    p.str('arg1').multiple()
-...
->>> print len(arg1)  # arg1 is list
->>> print arg1[0]
+::
+
+    with Parser(locals()) as p:
+        p.str('arg1').multiple()
+
+        print len(arg1)  # arg1 is list
+        print arg1[0]
 
 To use:
 
@@ -234,12 +257,14 @@ Note: by indicating ``multiple``, the variable is stored as a ``list`` *even* if
 one instance is specified by the user.
 
 Indicating default values or environment variables
--------------------------
+--------------------------------------------------
 
 A default value means the argument will receive the value if not specified.
 
->>> with Parser(locals()) as p:
-...    p.str('arg1').default('hello')
+::
+
+    with Parser(locals()) as p:
+        p.str('arg1').default('hello')
 
 Both executions are equivalent:
 
@@ -251,8 +276,10 @@ Both executions are equivalent:
 Additionally, we can specify that an argument should be drawn from the OS/shell
 environment if not provided at the command line:
 
->>> with Parser(locals()) as p:
-...    p.str('port').environment()
+::
+
+    with Parser(locals()) as p:
+        p.str('port').environment()
 
 Now the following shell interactions are equivalent:
 
@@ -270,9 +297,11 @@ Allowing no argument label
 
 If we want an argument to be parsed even without a label:
 
->>> with Parser(locals()) as p:
-...    p.str('arg1').unspecified_default()
-...    p.str('arg2')
+::
+
+    with Parser(locals()) as p:
+        p.str('arg1').unspecified_default()
+        p.str('arg2')
 
 Now, an argument without a label will be saved to ``arg1``:
 
@@ -289,9 +318,11 @@ Creating your own types
 
 It is possible to create your own types using the `cast` function, in which you specify a function that is run on the value at parse time. Let's say we want the user to be able to pass a comma-separated list of ``float`` values, or a space-delimited list of ``int`` values:
 
->>> with Parser(locals()) as p:
-...    p.str('floatlist').cast(lambda x: [float(val) for val in x.split(',')])
-...    p.multiword('intlist').cast(lambda x: [int(val) for val in x.split()])
+::
+
+    with Parser(locals()) as p:
+        p.str('floatlist').cast(lambda x: [float(val) for val in x.split(',')])
+        p.multiword('intlist').cast(lambda x: [int(val) for val in x.split()])
 
 A sample command line:
 
@@ -314,22 +345,26 @@ if
 
 Argument must be specified if ``condition``:
 
->>> with Parser(locals()) as p:
-...    arg1 = p.int('arg1')
-...    arg2 = p.float('arg2').if_(arg1 > 10) # 'arg2' must be specified if
-...                                          # 'arg1' > 10
-...    p.float('arg3').if_(arg1.or_(arg2))   # 'arg3' must be specified if
-...                                          # 'arg1' or 'arg2' is
+::
+
+    with Parser(locals()) as p:
+        arg1 = p.int('arg1')
+        arg2 = p.float('arg2').if_(arg1 > 10) # 'arg2' must be specified if
+        # 'arg1' > 10
+        p.float('arg3').if_(arg1.or_(arg2))   # 'arg3' must be specified if
+        # 'arg1' or 'arg2' is
 
 unless
 ------
 
 Argument must be specified ``unless`` ``condition``.
 
->>> with Parser(locals()) as p:
-...    arg1 = p.int('arg1')
-...    p.float('arg2').unless(arg1 > 10)    # 'arg2' must be specified if
-...                                         # 'arg1' <= 10
+::
+
+    with Parser(locals()) as p:
+        arg1 = p.int('arg1')
+        p.float('arg2').unless(arg1 > 10)    # 'arg2' must be specified if
+        # 'arg1' <= 10
 
 requires
 --------
@@ -338,24 +373,28 @@ We described ``requires`` previously, but here we show that it also works with c
 
 If argument is specified, then ``condition`` must be true;
 
->>> with Parser(locals()) as p:
-...    arg1 = p.int('arg1')
-...    p.float('arg2').requires(arg1 < 20)  # if 'arg2' specified, 'arg1' must
-...                                         # be < 20
+::
+
+    with Parser(locals()) as p:
+        arg1 = p.int('arg1')
+        p.float('arg2').requires(arg1 < 20)  # if 'arg2' specified, 'arg1' must
+        # be < 20
 
 and/or
 ------
 
 Build conditions via logical operators ``and_`` and ``or_``:
 
->>> with Parser(locals()) as p:
-...    arg1 = p.int('arg1')
-...    p.float('arg2').unless((0 < arg1).and_(arg1 < 10))  # 'arg2' is required
-...                                                        # unless 0 < arg1 < 10
-...
-...    p.float('arg3').if_((arg1 < 0).or_(arg1 > 10))      # 'arg3' is required
-...                                                        # if 'arg1' < 0 or
-...                                                        # 'arg1' > 10
+::
+
+    with Parser(locals()) as p:
+        arg1 = p.int('arg1')
+        p.float('arg2').unless((0 < arg1).and_(arg1 < 10))  # 'arg2' is required
+        # unless 0 < arg1 < 10
+
+        p.float('arg3').if_((arg1 < 0).or_(arg1 > 10))      # 'arg3' is required
+        # if 'arg1' < 0 or
+        # 'arg1' > 10
 
 Aggregate calls
 ===============
@@ -367,60 +406,68 @@ At least one
 
 Require at least one (up to all) of the subsequent arguments:
 
->>> with Parser(locals()) as p:
-...    p.at_least_one(
-...       p.str('arg1'),
-...       p.str('arg2'),
-...       p.str('arg3')
-...    )
+::
+
+    with Parser(locals()) as p:
+        p.at_least_one(
+        p.str('arg1'),
+        p.str('arg2'),
+        p.str('arg3')
+    )
 
 Mutual exclusion
 ----------------
 
 Only one of the arguments can be specified:
 
->>> with Parser(locals()) as p:
-...    p.only_one_if_any(
-...       p.str('arg1'),
-...       p.str('arg2'),
-...       p.str('arg3')
-...    )
+::
+
+    with Parser(locals()) as p:
+        p.only_one_if_any(
+        p.str('arg1'),
+        p.str('arg2'),
+        p.str('arg3')
+        )
 
 All if any
 ----------
 
 If any of the arguments is be specified, all of them must be:
 
->>> with Parser(locals()) as p:
-...    p.all_if_any(
-...       p.str('arg1'),
-...       p.str('arg2'),
-...       p.str('arg3')
-...    )
+::
+
+    with Parser(locals()) as p:
+        p.all_if_any(
+        p.str('arg1'),
+        p.str('arg2'),
+        p.str('arg3')
+        )
 
 Require one
 -----------
 
 One and only one of the arguments must be specified:
 
->>> with Parser(locals()) as p:
-...    p.require_one(
-...       p.str('arg1'),
-...       p.str('arg2'),
-...       p.str('arg3')
-...    )
+::
+
+    with Parser(locals()) as p:
+        p.require_one(
+            p.str('arg1'),
+            p.str('arg2'),
+            p.str('arg3')
+        )
 
 Complex Dependencies
 ====================
 
->>> with Parser(locals()) as p:
-...    p.at_least_one(            # at least one of
-...      p.only_one_if_any(       # 'arg1', 'arg2', and/or 'arg3'
-...        p.int('arg1'),         # must be specified, but
-...        p.flag('arg2'),        # 'arg1' and 'arg2' may not
-...      ),                       # both be specified
-...      p.str('arg3'),
-...    )
+    with Parser(locals()) as p:
+        p.at_least_one(            # at least one of
+            p.only_one_if_any(       # 'arg1', 'arg2', and/or 'arg3'
+            p.int('arg1'),         # must be specified, but
+            p.flag('arg2'),        # 'arg1' and 'arg2' may not
+        ),                       # both be specified
+            p.str('arg3'),
+        )
 
 >>> with Parser(locals() as p:
 ...     p.require_one(
@@ -502,8 +549,8 @@ Setting help function
 
 The :func:`set_help_prefix` allows you to specify the content that appears before the argument list when users trigger the ``--help`` command.
 
-Code
-====
+API
+===
 
 .. currentmodule:: blargs
 
