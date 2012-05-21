@@ -1,29 +1,13 @@
-#  Copyright (c) 2011, Karl Gyllstrom
-#  All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met: 
-#
-#  1. Redistributions of source code must retain the above copyright notice, this
-#     list of conditions and the following disclaimer. 
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions and the following disclaimer in the documentation
-#     and/or other materials provided with the distribution. 
-#  
-#     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-#     ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-#     WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#     DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-#     ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-#     (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-#     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-#     ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-#     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-#     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#  
-#     The views and conclusions contained in the software and documentation are those
-#     of the authors and should not be interpreted as representing official policies, 
-#     either expressed or implied, of the FreeBSD Project.
+'''
+
+    blargs command line parser
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Easy argument parsing with powerful dependency support.
+    :copyright: (c) 2012 by Karl Gyllstrom
+    :license: BSD (see LICENSE.txt)
+
+'''
 
 
 from blargs import Parser, Option, UnspecifiedArgumentError, ConflictError, ArgumentError,\
@@ -1002,11 +986,12 @@ usage: {0}
     def test_set_at_least_one_required(self):
         def create():
             p = Parser()
-            p.str('x')
-            p.str('y')
-            p.str('z')
+            p.at_least_one(
+                p.str('x'),
+                p.str('y'),
+                p.str('z')
+            )
 
-            p.at_least_one('x', 'y', 'z')
             return p
 
         create()._process_command_line(['--x', '1'])
@@ -1021,11 +1006,12 @@ usage: {0}
     def test_one_required(self):
         def create():
             p = Parser()
-            p.str('x')
-            p.str('y')
-            p.str('z')
+            p.require_one(
+                p.str('x'),
+                p.str('y'),
+                p.str('z')
+            )
 
-            p.require_one(*'xyz')
             return p
 
         create()._process_command_line(['--x', '1'])

@@ -9,6 +9,7 @@
 
 '''
 
+
 from __future__ import print_function
 
 import os
@@ -563,7 +564,8 @@ class Option(Condition):
         return self._parser._conflicts.get(self, [])
 
     def _getreqs(self):
-        return self._parser._requires.get(self, [])
+        return self._requires
+#        return self._parser._requires.get(self, [])
 
     def _alias(self):
         return self._parser._source_to_alias.get(self.argname)
