@@ -1,0 +1,3 @@
+[submodule "doc/_themes/blargs"]
+	path = doc/_themes/blargs
+	url = git@github.com:gyllstromk/blargs-theme.git
