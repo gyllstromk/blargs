@@ -10,13 +10,13 @@
 '''
 
 
-from blargs import Parser, Option, UnspecifiedArgumentError, ConflictError, ArgumentError,\
-                   DependencyError, MissingRequiredArgumentError,\
-                   FormatError, ConditionError,\
-                   MultipleSpecifiedArgumentError,\
-                   ManyAllowedNoneSpecifiedArgumentError,\
-                   MissingValueError, FailedConditionError,\
-                   FakeSystemExit
+from blargs import (Parser, Option, UnspecifiedArgumentError, ConflictError, ArgumentError,
+                   DependencyError, MissingRequiredArgumentError,
+                   FormatError, ConditionError,
+                   MultipleSpecifiedArgumentError,
+                   ManyAllowedNoneSpecifiedArgumentError,
+                   MissingValueError, FailedConditionError,
+                   FakeSystemExit)
 
 
 import sys
@@ -54,7 +54,9 @@ class FileBasedTestCase(unittest.TestCase):
             p.config('a')
             return p
 
-        self.assertRaises(IOError, create()._process_command_line, ['--a', 'doesnotexist.cfg'])
+        self.assertRaises(IOError, create()._process_command_line, ['--a',
+            'doesnotexist.cfg'])
+
         fname = os.path.join(self._dir, 'config.cfg')
 
         def write_config(**kw):
@@ -212,8 +214,8 @@ class TestCase(unittest.TestCase):
         s = StringIO()
         self.assertRaises(FakeSystemExit, create, s)
         self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
-usage: {0}
-[--a <int>] [--yi/-y <option>] [--c <int>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <int>]
+usage: test.py
+[--a <option>] [--yi/-y <option>] [--c <option>] [--b <option>] [--e <option>] [--help/-h <option>] [--x <option>] [--z <option>] [--d <option>]
 '''.format(sys.argv[0]))
 
     def test_url(self):
