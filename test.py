@@ -125,8 +125,24 @@ class FileBasedTestCase(unittest.TestCase):
         self.assertRaises(DependencyError, create()._process_command_line) # should pass because default
         self.assertRaises(DependencyError, create()._process_command_line, ['--a', fname])
 
+        with open(fname, 'w') as w:
+            w.write('''[myconfig]
+b=9
+[part]
+b=3
+''')
+
         p = Parser()
-        p.config('a').default(fname)
+        p.config('a')
+        p.int('b')
+        self.assertRaises(MultipleSpecifiedArgumentError,
+                p._process_command_line, ['--a', fname])
+
+        p = Parser()
+        p.config('a')
+        p.int('b').multiple()
+        vals = p._process_command_line(['--a', fname])
+        self.assertEqual(vals['b'], [3, 9])
 
     def test_file(self):
         def create():

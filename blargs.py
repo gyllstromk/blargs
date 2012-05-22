@@ -1221,13 +1221,11 @@ class Parser(object):
 
                 current_reader = self._readers.get(argument_name)
 
-                if argument_name in self._multiple:
-                    current_reader = current_reader.fresh_copy()
-
                 if current_reader is None:
                     raise UnspecifiedArgumentError(argument_name)
-                else:
-                    current_reader.activate()
+
+                current_reader = current_reader.fresh_copy()
+                current_reader.activate()
 
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
@@ -1270,7 +1268,8 @@ class Parser(object):
                 for k, v in value.getvalue():
                     # XXX redundant
 
-                    current_reader = self._readers.get(k)
+                    current_reader = pc.get(k)
+                    # XXX is this funky? what happens when we get multiple here?
 
                     if current_reader is None:
                         # developer didn't specify this argument
@@ -1278,6 +1277,7 @@ class Parser(object):
 
                     is_specified = current_reader.is_specified()
                     if is_specified:
+                        # XXX does this work with _MultiWordArgumentReader?
                         current_reader = current_reader.fresh_copy()
 
                     current_reader.consume_or_skip(v)
