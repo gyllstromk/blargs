@@ -1438,18 +1438,20 @@ class Parser(object):
             return True
         return False
 
-    def _option_label(self, name, opt):
-        if opt._cast() is int:
+    def _option_label(self, reader):
+        if not isinstance(reader, Caster):
+            return 'option'
+
+        if reader._cast is int:
             return 'int'
 
-        if opt._cast() is float:
+        if reader._cast is float:
             return 'float'
 
-        if opt._cast() is float:
+        if reader._cast is float:
             return 'float'
 
-        if opt._cast() is _RangeCaster:
-            # XXX not yet tested
+        if isinstance(reader._cast, _RangeCaster):
             return 'range'
 
         return 'option'
@@ -1458,8 +1460,8 @@ class Parser(object):
         pkey = str(opt)
 
         reader = self._readers[opt.argname]
-        if reader != _FlagArgumentReader:
-            pkey = '%s <%s>' % (pkey, self._option_label(opt.argname, opt))
+        if not isinstance(reader, _FlagArgumentReader):
+            pkey = '%s <%s>' % (pkey, self._option_label(reader))
 
         return pkey
 

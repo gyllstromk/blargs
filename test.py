@@ -248,8 +248,8 @@ class TestCase(unittest.TestCase):
                         p.int('b'),
                     ),
                     p.only_one_if_any(
-                        p.int('c'),
-                        p.int('d'),
+                        p.float('c'),
+                        p.range('d'),
                     )
                 )
                 p.int('x').required()
@@ -261,7 +261,7 @@ class TestCase(unittest.TestCase):
         self.assertRaises(FakeSystemExit, create, s)
         self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
 usage: test.py
-[--a <option>] [--yi/-y <option>] [--c <option>] [--b <option>] [--e <option>] [--help/-h <option>] [--x <option>] [--z <option>] [--d <option>]
+[--a <int>] [--yi/-y <option>] [--c <float>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <range>]
 '''.format(sys.argv[0]))
 
     def test_url(self):
