@@ -597,7 +597,9 @@ class _ArgumentReader(object):
         self.parent = parent
         self._default = _ArgumentReader.UNSPECIFIED
         self._init()
-        self._was_default = False
+
+    def fresh_copy(self):
+        return self.__class__(self.parent)
 
     def _init(self):
         pass
@@ -634,7 +636,6 @@ class _ArgumentReader(object):
         if self.is_specified():
             return self._get()
 
-        self._was_default = True
         return self.default()
 
 
@@ -696,6 +697,10 @@ class Caster(object):
     def __init__(self, reader, cast):
         self._reader = reader
         self._cast = cast
+
+    def fresh_copy(self):
+        # XXX does _cast need to be copied too?
+        return self.__class__(self._reader.fresh_copy(), self._cast)
 
     def activate(self):
         self._reader.activate()
@@ -1184,11 +1189,7 @@ class Parser(object):
                 current_reader = self._readers.get(argument_name)
 
                 if argument_name in self._multiple:
-                    if isinstance(current_reader, Caster):
-                        c = Caster(current_reader._reader.__class__(self), current_reader._cast)
-                    else:
-                        c = current_reader.__class__(self)
-                    current_reader = c
+                    current_reader = current_reader.fresh_copy()
 
                 if current_reader is None:
                     raise UnspecifiedArgumentError(argument_name)
@@ -1252,10 +1253,7 @@ class Parser(object):
                         # developer didn't specify this argument
                         continue
 
-                    if isinstance(current_reader, Caster):
-                        c = Caster(current_reader._reader.__class__(self), current_reader._cast)
-                    else:
-                        c = current_reader.__class__(self)
+                    c = current_reader.fresh_copy()
 
                     c.consume_or_skip(v)
 
