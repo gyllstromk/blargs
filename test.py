@@ -10,6 +10,9 @@
 '''
 
 
+# XXX need to test multiple for 3+
+
+
 from blargs import (Parser, Option, UnspecifiedArgumentError, ConflictError, ArgumentError,
                    DependencyError, MissingRequiredArgumentError,
                    FormatError, ConditionError,
@@ -54,8 +57,8 @@ class FileBasedTestCase(unittest.TestCase):
             p.config('a')
             return p
 
-#         self.assertRaises(IOError, create()._process_command_line, ['--a',
-#             'doesnotexist.cfg'])
+        self.assertRaises(IOError, create()._process_command_line, ['--a',
+             'doesnotexist.cfg'])
 
         fname = os.path.join(self._dir, 'config.cfg')
 
@@ -70,52 +73,55 @@ class FileBasedTestCase(unittest.TestCase):
 
         write_config(b=3, c='hello')
 
-        vals = p._process_command_line(['--a', fname])
+        vals = create()._process_command_line(['--a', fname])
         self.assertEqual(list(vals.keys()), ['help'])
 
+        def create():
+            p = Parser({})
+            p.config('a')
+            p.int('b')
+            p.str('c')
+            p.int('d')
+            return p
+
+        for delim in '=:':
+            write_config(b=3, c='hello', d=5, delim=delim)
+            vals = create()._process_command_line(['--a', fname])
+            self.assertEqual(vals['b'], 3)
+            self.assertEqual(vals['c'], 'hello')
+            self.assertEqual(vals['d'], 5)
+
         write_config(b=3, c='hello', d='what')
+        self.assertRaises(FormatError, create()._process_command_line, ['--a', fname])
 
-        p = Parser({})
-        p.config('a')
-        p.int('b')
-        p.str('c')
-        p.int('d')
+        # XXX may want subsequent line to eventually be true
+#        vals = create()._process_command_line(['--a', fname, '--d', '4'])
+        self.assertRaises(MultipleSpecifiedArgumentError,
+                create()._process_command_line, (['--a', fname, '--d', '4']))
 
-        self.assertRaises(FormatError, p._process_command_line, ['--a', fname])
+#         self.assertEqual(vals['b'], 3)
+#         self.assertEqual(vals['c'], 'hello')
+#         self.assertEqual(vals['d'], 4)
 
-        write_config(b=3, c='hello', d=5)
+        self.assertRaises(MultipleSpecifiedArgumentError,
+                create()._process_command_line, (['--a', fname, '--d', '4', '--c', 'sup',
+                '--b', '1']))
 
-        vals = p._process_command_line(['--a', fname])
-        self.assertEqual(vals['b'], 3)
-        self.assertEqual(vals['c'], 'hello')
-        self.assertEqual(vals['d'], 5)
-
-        vals = p._process_command_line(['--a', fname, '--d', '4'])
-        self.assertEqual(vals['b'], 3)
-        self.assertEqual(vals['c'], 'hello')
-        self.assertEqual(vals['d'], 4)
-
-        vals = p._process_command_line(['--a', fname, '--d', '4', '--c', 'sup',
-            '--b', '1'])
-
-        self.assertEqual(vals['b'], 1)
-        self.assertEqual(vals['c'], 'sup')
-        self.assertEqual(vals['d'], 4)
+#         self.assertEqual(vals['b'], 1)
+#         self.assertEqual(vals['c'], 'sup')
+#         self.assertEqual(vals['d'], 4)
 
         p = Parser({})
         p.config('a').default(fname)
         p.int('b').requires(p.int('d'))
         p.str('c')
         write_config(b=3, c='sup')
-        self.assertRaises(DependencyError, p._process_command_line)
 
-        write_config(b=3, c='sup', delim=':')
-        vals = p._process_command_line(['--a', fname, '--d', '4', '--c', 'sup',
-            '--b', '1'])
+        self.assertRaises(DependencyError, p._process_command_line) # should pass because default
+        self.assertRaises(DependencyError, p._process_command_line, ['--a', fname])
 
-        self.assertEqual(vals['b'], 1)
-        self.assertEqual(vals['c'], 'sup')
-        self.assertEqual(vals['d'], 4)
+        p = Parser()
+        p.config('a').default(fname)
 
     def test_file(self):
         def create():

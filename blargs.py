@@ -34,12 +34,16 @@ else:
     import ConfigParser as cpars
 
 
-def _ConfigCaster(f):
-    cfp = cpars.ConfigParser()
-    cfp.readfp(open(f))
-    for sec in cfp.sections():
-        for key, value in cfp.items(sec):
-            yield key, value
+class _ConfigCaster(object):
+    def __init__(self, parent):    
+        self._parent = parent
+
+    def __call__(self, filename):
+        cfp = cpars.ConfigParser()
+        cfp.readfp(open(filename))
+        for sec in cfp.sections():
+            for key, value in cfp.items(sec):
+                yield key, value
 
 
 def _RangeCaster(value):
@@ -593,6 +597,7 @@ class _ArgumentReader(object):
         self.parent = parent
         self._default = _ArgumentReader.UNSPECIFIED
         self._init()
+        self._was_default = False
 
     def _init(self):
         pass
@@ -629,6 +634,7 @@ class _ArgumentReader(object):
         if self.is_specified():
             return self._get()
 
+        self._was_default = True
         return self.default()
 
 
@@ -803,6 +809,9 @@ class Parser(object):
         self._namemaps = {}
         self._rnamemaps = {}
 
+    def _argument_exists(self, name_or_alias):
+        return name_or_alias in self._readers or name_or_alias in self._alias
+
     def set_help_prefix(self, message):
         ''' Indicate text to appear before argument list when the ``help``
         function is triggered. '''
@@ -894,7 +903,7 @@ class Parser(object):
             not 5 (from the config file).
             '''
 
-        return self.str(name).cast(_ConfigCaster)
+        return self.str(name).cast(_ConfigCaster(self))
 
     def enum(self, name, values):
         arg = self.str(name)
@@ -1183,8 +1192,8 @@ class Parser(object):
 
                 if current_reader is None:
                     raise UnspecifiedArgumentError(argument_name)
-
-                current_reader.activate()
+                else:
+                    current_reader.activate()
 
             elif self._unspecified_default is not None:
                 argument_name = self._unspecified_default
@@ -1229,21 +1238,48 @@ class Parser(object):
 
         return assigned
 
-    def _assign_configs(self, parsed, valid_args):
-        argvalues = {}
-        for key, values in iteritems(parsed):
-            cast = self._casts.get(key)
-            if cast and cast == _ConfigCaster:
-                value = values[0].get()
-                for k, v in cast(value):
-                    argvalues[k] = v
+    def _config_values(self, parsed):
+        pc = parsed.copy()
+        todelete = set()
+        for key, value in iteritems(parsed):
+            if isinstance(value, Caster) and isinstance(value._cast, _ConfigCaster):
+                for k, v in value.getvalue():
+                    # XXX redundant
 
-        return argvalues
+                    current_reader = self._readers.get(k)
+
+                    if current_reader is None:
+                        # developer didn't specify this argument
+                        continue
+
+                    if isinstance(current_reader, Caster):
+                        c = Caster(current_reader._reader.__class__(self), current_reader._cast)
+                    else:
+                        c = current_reader.__class__(self)
+
+                    c.consume_or_skip(v)
+
+                    # what if duplicates in config?
+                    if k in pc:
+                        v = pc[k]
+                        if not isinstance(v, list):
+                            if v.is_specified():
+                                v = [v, c]
+                            else:
+                                v = c
+                        else:
+                            v = v + [c]
+                    else:
+                        assert False
+                        v = c
+
+                    pc[k] = v
+
+                del pc[key]  # ignore config as argument now XXX
+
+        return pc
 
     def _assign(self, combined):
-#        argvalues = {}
-#        argvalues.update(self._assign_configs(parsed, set(argvalues.keys())))
-
         assigned = {}
         for key, values in iteritems(combined):
             try:
@@ -1332,8 +1368,10 @@ class Parser(object):
 
     def _combine_with_defaults(self, user_args):
         copy = self._readers.copy()
+
         for k, v in iteritems(user_args):
             copy[k] = v
+
         return copy
 
     def _process_command_line(self, args=None):
@@ -1341,11 +1379,12 @@ class Parser(object):
             args = self._get_args(args)
             tokenized = self._tokenize(args)
             user_args = self._parse(tokenized)
-            self._help_if_necessary(user_args)
+            user_args = self._combine_with_defaults(user_args)
+            user_args = self._config_values(user_args)
             self._check_multiple(user_args)
-            combined = self._combine_with_defaults(user_args)
-            self._verify(combined)
-            assigned = self._assign(combined)
+            #self._help_if_necessary(user_args)
+            self._verify(user_args)
+            assigned = self._assign(user_args)
             self._assign_to_store(assigned)
         except ArgumentError as e:
             raise e
