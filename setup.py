@@ -11,7 +11,7 @@ from setuptools import setup
 
 setup(name='blargs',
       version=blargs.__version__,
-      url='https://bitbucket.org/gyllstromk/blargs',
+      url='https://github.com/gyllstromk/blargs',
       license='BSD',
       author='Karl Gyllstrom',
       author_email='karl.gyllstrom+blargs@gmail.com',
@@ -22,7 +22,3 @@ setup(name='blargs',
       platforms='any',
       test_suite='test',
      )
-
-# deploy
-# export LC_ALL='en.UTF-8'
-# python setup.py sdist upload
