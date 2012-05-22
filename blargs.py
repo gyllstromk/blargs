@@ -790,11 +790,6 @@ class Group(Option):
         return ', '.join([str(name) for name in self._names])
 
 
-class FakeSystemExit(ValueError):
-    # Used for testing
-    pass
-
-
 class Parser(object):
     ''' Command line parser. '''
 
@@ -803,7 +798,6 @@ class Parser(object):
         self._readers = {}
         self._extras = []
         self._unspecified_default = None
-        self.require_n = {}
 
         # dict of A (required) -> args that could replace A if A is not
         # specified
@@ -830,7 +824,7 @@ class Parser(object):
         # help message
         self._help_prefix = None
 
-        self._suppress_sys_exit = False
+        self._sys_exit_error = SystemExit
         self._out = sys.stdout
 
         # set by user
@@ -1242,7 +1236,7 @@ class Parser(object):
     def _help_if_necessary(self, processed):
         if 'help' in processed:
             self.print_help()
-            sys.exit(0)
+            raise self._sys_exit_error(0)
 
     def _config_values(self, parsed):
         pc = parsed.copy()
@@ -1401,9 +1395,8 @@ class Parser(object):
             self._options.values()))
 
         self.emit('\n'.join(msg))
-        if self._suppress_sys_exit:
-            raise FakeSystemExit
-        sys.exit(1)
+
+        raise self._sys_exit_error(1)
 
     @localize
     @_options_to_names
@@ -1416,12 +1409,6 @@ class Parser(object):
     @_names_to_options
     def _set_requires(self, a, b):
         self._requires.setdefault(a, []).append(b)
-
-    @_localize_all
-    @_verify_args_exist
-    @_options_to_names
-    def set_requires_n_of(self, a, n, *others):
-        self.require_n[a] = (n, others)
 
     @_localize_all
     @_verify_args_exist

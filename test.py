@@ -18,8 +18,7 @@ from blargs import (Parser, Option, UnspecifiedArgumentError, ConflictError, Arg
                    FormatError, ConditionError,
                    MultipleSpecifiedArgumentError,
                    ManyAllowedNoneSpecifiedArgumentError,
-                   MissingValueError, FailedConditionError,
-                   FakeSystemExit)
+                   MissingValueError, FailedConditionError)
 
 
 import sys
@@ -36,6 +35,12 @@ if sys.version_info[0] == 3:
     StringIO = io.StringIO
 else:
     from StringIO import StringIO
+
+
+
+class FakeSystemExit(ValueError):
+    # Used for testing
+    pass
 
 
 def specify(*names):
@@ -241,7 +246,7 @@ class TestCase(unittest.TestCase):
         def create(strio):
             with Parser(locals()) as p:
                 p._out = strio
-                p._suppress_sys_exit = True
+                p._sys_exit_error = FakeSystemExit
                 p.require_one(
                     p.all_if_any(
                         p.int('a'),
