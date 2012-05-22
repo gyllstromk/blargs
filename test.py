@@ -142,7 +142,14 @@ b=3
         p.config('a')
         p.int('b').multiple()
         vals = p._process_command_line(['--a', fname])
-        self.assertEqual(vals['b'], [3, 9])
+        self.assertEqual(sorted(vals['b']), [3, 9])
+
+        write_config(b='hello world')
+        p = Parser()
+        p.config('a')
+        p.multiword('b')
+        vals = p._process_command_line(['--a', fname])
+        self.assertEqual(vals['b'], 'hello world')
 
     def test_file(self):
         def create():

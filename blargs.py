@@ -77,7 +77,7 @@ class Multidict(object):
 
 
 class _ConfigCaster(object):
-    def __init__(self, parent):    
+    def __init__(self, parent):
         self._parent = parent
 
     def __call__(self, filename):
@@ -88,28 +88,29 @@ class _ConfigCaster(object):
                 yield key, value
 
 
-def _RangeCaster(value):
-    def raise_error():
-        raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
-                + ' N+i') % value)
+class _RangeCaster(object):
+    def __call__(self, value):
+        def raise_error():
+            raise FormatError(('%s is not range format: N:N+i, N-N+i, or N'
+                    + ' N+i') % value)
 
-    splitter = None
-    for char in (' :-'):
-        if char in value:
-            splitter = char
-            break
+        splitter = None
+        for char in (' :-'):
+            if char in value:
+                splitter = char
+                break
 
-    if splitter:
-        toks = value.split(splitter)
-    else:
-        toks = [value]
+        if splitter:
+            toks = value.split(splitter)
+        else:
+            toks = [value]
 
-    if not (1 <= len(toks) <= 3):
-        raise_error()
-    try:
-        return xrange(*[int(y) for y in toks])
-    except ValueError:
-        raise_error()
+        if not (1 <= len(toks) <= 3):
+            raise_error()
+        try:
+            return xrange(*[int(y) for y in toks])
+        except ValueError:
+            raise_error()
 
 
 class _DirectoryOpenerCaster(object):
@@ -129,14 +130,16 @@ class _DirectoryOpenerCaster(object):
         return name
 
 
-def _FileOpenerCaster(mode=None, buffering=None):
-    kw = {}
-    if mode is not None:
-        kw['mode'] = mode
-    if buffering is not None:
-        kw['buffering'] = buffering
+class _FileOpenerCaster(object):
+    def __init__(self, mode=None, buffering=None):
+        self._kw = {}
+        if mode is not None:
+            self._kw['mode'] = mode
+        if buffering is not None:
+            self._kw['buffering'] = buffering
 
-    return partial(open, **kw)
+    def __call__(self, *args):
+        return open(*args, **self._kw)
 
 
 # ---------- decorators ---------- #
@@ -242,6 +245,7 @@ class ConditionError(ArgumentError):
     ''' Condition not met. '''
 
     def __init__(self, argname, condition):
+        super(ConditionError, self).__init__()
         self.argname = argname
         self.condition = condition
 
@@ -908,7 +912,7 @@ class Parser(object):
             ...   p.config('conf')
 
             Now, arg ``a`` can be specfied on the command line, or in the
-            configuration file passed to ``conf``.  For example:
+            configuration file passed to ``conf``. For example:
 
             ::
 
@@ -930,15 +934,10 @@ class Parser(object):
             would be ignored (as the developer did not create an ``x``
             argument).
 
-            If anything is specified on the command line, its value is not
-            taken from the config file. For example:
+            If an argument is specified both on the command line and within the
+            config file, it must be indicated as allowing multiple (via
+            :py:meth:`.multiple`).
 
-            ::
-
-                python test.py --a 3 --config myconfig.cfg
-
-            In this case, the value of ``a`` is 3 (from the command line) and
-            not 5 (from the config file).
             '''
 
         return self.str(name).cast(_ConfigCaster(self))
@@ -991,7 +990,7 @@ class Parser(object):
               python test.py --values 0 10 3  # -> xrange(0, 10, 3)
         '''
 
-        return self.multiword(name).cast(_RangeCaster)
+        return self.multiword(name).cast(_RangeCaster())
 
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
@@ -1264,12 +1263,11 @@ class Parser(object):
     def _config_values(self, parsed):
         pc = parsed.copy()
         for key, value in parsed:
-            if isinstance(value, Caster) and isinstance(value._cast, _ConfigCaster):
-                for k, v in value.getvalue():
-                    # XXX redundant
+            if isinstance(value, Caster) and isinstance(value._cast,
+                    _ConfigCaster):  # XXX ugly
 
+                for k, v in value.getvalue():
                     current_reader = pc.get(k)
-                    # XXX is this funky? what happens when we get multiple here?
 
                     if current_reader is None:
                         # developer didn't specify this argument
@@ -1277,17 +1275,14 @@ class Parser(object):
 
                     is_specified = current_reader.is_specified()
                     if is_specified:
-                        # XXX does this work with _MultiWordArgumentReader?
                         current_reader = current_reader.fresh_copy()
 
                     current_reader.consume_or_skip(v)
 
-                    # what if duplicates in config?
-
                     if is_specified:
                         pc[k] = current_reader
 
-                del pc[key]  # ignore config as argument now XXX
+                del pc[key]
 
         return pc
 
@@ -1479,6 +1474,7 @@ class Parser(object):
             return 'float'
 
         if opt._cast() is _RangeCaster:
+            # XXX not yet tested
             return 'range'
 
         return 'option'
