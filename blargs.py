@@ -596,9 +596,6 @@ class Option(Condition):
 
     # -- private access methods
 
-    def _cast(self):
-        return self._parser._casts.get(self.argname)
-
     def _isrequired(self):
         return self in self._parser._required
 
@@ -804,8 +801,6 @@ class Parser(object):
     def __init__(self, store=None, default_help=True):
         self._options = {}
         self._readers = {}
-        self._option_labels = {}
-        self._casts = {}
         self._extras = []
         self._unspecified_default = None
         self.require_n = {}
@@ -1131,16 +1126,13 @@ class Parser(object):
         self._alias[alias] = source
         self._source_to_alias[source] = alias
 
-    def _add_option(self, name, argument_label=None):
+    def _add_option(self, name):
         name = self._localize(name)
 
         if name in self._readers:
             raise ValueError('multiple types specified for %s' % name)
 
         self._set_reader(name, _SingleWordReader(self))
-
-        if argument_label is not None:
-            self._option_labels[name] = argument_label
 
         o = Option(name, self)
         self._options[name] = o
@@ -1251,14 +1243,6 @@ class Parser(object):
         if 'help' in processed:
             self.print_help()
             sys.exit(0)
-
-    def _assign_defaults(self, readers):
-        assigned = {}
-        for key, value in iteritems(readers):
-            cast = self._casts.get(key)
-            cast = cast if cast else lambda x: x
-
-        return assigned
 
     def _config_values(self, parsed):
         pc = parsed.copy()
@@ -1455,10 +1439,6 @@ class Parser(object):
         return False
 
     def _option_label(self, name, opt):
-        label = self._option_labels.get(name)
-        if label is not None:
-            return label
-
         if opt._cast() is int:
             return 'int'
 
