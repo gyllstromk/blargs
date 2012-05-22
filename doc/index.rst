@@ -27,7 +27,7 @@ Blargs has been tested on Python2.6 to Python3.2 and PyPy.
 
 Note: blargs is currently still in *beta*. You can help by submitting bugs here_!
 
-.. _here: https://bitbucket.org/gyllstromk/blargs/issues?status=new&status=open
+.. _here: https://github.com/gyllstromk/blargs/issues/new
 
 Installation
 ============
@@ -42,7 +42,7 @@ Or by git:
 
 ::
 
-    git clone https://bitbucket.org/gyllstromk/blargs.git
+    git clone https://github.com/gyllstromk/blargs.git
 
 License
 =======

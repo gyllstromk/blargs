@@ -253,7 +253,7 @@ class TestCase(unittest.TestCase):
         p.out = StringIO()
 
         p.print_help()
-        self.assertEqual(p.out.getvalue(), 'Usage: test.py [--a <int>] [--c <float>] [--b <float>] [--help/-h]\nOptions: (! denotes required argument)\n   --a <int>     a fun variable                                         Requires --b\n   --c <float>                                                                      \n   --b <float>   yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h     Print help message.                                                \n')
+        self.assertEqual(p.out.getvalue(), 'Usage: %s [--a <int>] [--c <float>] [--b <float>] [--help/-h]\nOptions: (! denotes required argument)\n   --a <int>     a fun variable                                         Requires --b\n   --c <float>                                                                      \n   --b <float>   yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h     Print help message.                                                \n' % sys.argv[0])
 
     def test_error_printing(self):
         def create(strio):
@@ -277,7 +277,7 @@ class TestCase(unittest.TestCase):
 
         s = StringIO()
         self.assertRaises(FakeSystemExit, create, s)
-        self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified\nUsage: test.py [--a <int>] [--yi/-y <option>] [--c <float>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <range>]\n'''.format(sys.argv[0]))
+        self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified\nUsage: {0} [--a <int>] [--yi/-y <option>] [--c <float>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <range>]\n'''.format(sys.argv[0]))
 
     def test_url(self):
         p = Parser()

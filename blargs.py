@@ -21,7 +21,7 @@ import sys
 
 if sys.version_info[0] == 3:
     iterkeys = lambda x: x.keys()
-    iteritems = lambda x: x.items()
+    iteritems = lambda x: iter(x.items())
     isstring = lambda x: isinstance(x, str)
     from urllib.parse import urlparse
     xrange = range
