@@ -3,6 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+
+.. currentmodule:: blargs
+
+
 blargs command line parsing
 ==================================
 
@@ -59,7 +63,9 @@ BSD
 Quick start
 ===========
 
-The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
+.. need to add links here
+
+The preferred use of :py:class:`Parser` is via the ``with`` idiom, as follows:
 
 ::
 
@@ -551,8 +557,6 @@ The :func:`set_help_prefix` allows you to specify the content that appears befor
 
 API
 ===
-
-.. currentmodule:: blargs
 
 ..	autoclass:: Parser
   :members:
