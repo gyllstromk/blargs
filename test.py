@@ -86,7 +86,10 @@ class FileBasedTestCase(unittest.TestCase):
 
         for delim in '=:':
             write_config(b=3, c='hello', d=5, delim=delim)
-            vals = create()._process_command_line(['--a', fname])
+            try:
+                vals = create()._process_command_line(['--a', fname])
+            except MultipleSpecifiedArgumentError as e:
+                print(e)
             self.assertEqual(vals['b'], 3)
             self.assertEqual(vals['c'], 'hello')
             self.assertEqual(vals['d'], 5)
@@ -111,14 +114,16 @@ class FileBasedTestCase(unittest.TestCase):
 #         self.assertEqual(vals['c'], 'sup')
 #         self.assertEqual(vals['d'], 4)
 
-        p = Parser({})
-        p.config('a').default(fname)
-        p.int('b').requires(p.int('d'))
-        p.str('c')
-        write_config(b=3, c='sup')
+        def create():
+            p = Parser({})
+            p.config('a').default(fname)
+            p.int('b').requires(p.int('d'))
+            p.str('c')
+            return p
 
-        self.assertRaises(DependencyError, p._process_command_line) # should pass because default
-        self.assertRaises(DependencyError, p._process_command_line, ['--a', fname])
+        write_config(b=3, c='sup')
+        self.assertRaises(DependencyError, create()._process_command_line) # should pass because default
+        self.assertRaises(DependencyError, create()._process_command_line, ['--a', fname])
 
         p = Parser()
         p.config('a').default(fname)
@@ -174,6 +179,18 @@ class FileBasedTestCase(unittest.TestCase):
         p.directory('b', create=True)
         vals = p._process_command_line(['--b', dirpath])
         self.assertEqual(vals['b'], dirpath)
+
+
+class MultiDictTestCase(unittest.TestCase):
+    def test_multidict(self):
+        from blargs import Multidict
+
+        m = Multidict()
+        self.assertRaises(KeyError, lambda x: x['x'], m)
+        m['x'] = 'y'
+        self.assertEqual(m['x'], 'y')
+        m['x'] = 'z'
+        self.assertEqual(m['x'], ['y', 'z'])
 
 
 class TestCase(unittest.TestCase):

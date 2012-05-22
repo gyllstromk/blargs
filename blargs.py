@@ -34,6 +34,48 @@ else:
     import ConfigParser as cpars
 
 
+class Multidict(object):
+    def __init__(self, dictionary=None):
+        self._values = {}
+        if dictionary is not None:
+            # XXX should we make sure dictionary conforms to our schema?
+            self._values.update(dictionary)
+
+    def __delitem__(self, key):
+        return self._values.__delitem__(key)
+
+    def __contains__(self, key):
+        return self._values.__contains__(key)
+
+    def copy(self):
+        return Multidict(self._values.copy())
+
+    def get(self, key):
+        return self._values.get(key)
+
+    def __str__(self):
+        return self._values.__str__()
+
+    def overwrite(self, key, value):
+        self._values[key] = value
+
+    def __setitem__(self, key, value):
+        if key in self._values:
+            v = self._values[key]
+            if not isinstance(v, list):
+                v = [v]
+
+            value = v + [value]
+
+        self._values[key] = value
+
+    def __getitem__(self, key):
+        return self._values.__getitem__(key)
+
+    def __iter__(self):
+        return iteritems(self._values)
+
+
 class _ConfigCaster(object):
     def __init__(self, parent):    
         self._parent = parent
@@ -509,15 +551,6 @@ class Option(Condition):
 
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
-
-#         for c in self._getconflicts():
-#             print(type(c))
-
-#         for c in self._getreqs():
-#             if isinstance(c, CallableCondition):
-#                 if isinstance(c._other, Option):
-#                     print('ss', c._other)
-#                     print(self._parser._multiple.get(c._other.argname))
 
         self._parser._set_multiple(self.argname)
         return self
@@ -1155,7 +1188,7 @@ class Parser(object):
 
     def _parse(self, tokenized):
         current_reader = None
-        parsed = {}
+        parsed = Multidict()
 
         for arg in tokenized:
             if current_reader is not None:
@@ -1204,20 +1237,11 @@ class Parser(object):
                 current_reader.consume_or_skip(arg)
 
             if argument_name:
-                v = parsed.get(argument_name)
-                if v is not None:
-                    if not isinstance(v, list):
-                        v = [v]
-
-                    v.append(current_reader)
-                else:
-                    v = current_reader
-
-                parsed[argument_name] = v
+                parsed[argument_name] = current_reader
             else:
                 self._extras.append(arg)
 
-        for k, v in iteritems(parsed):
+        for k, v in parsed:
             if not isinstance(v, list):
                 v = [v]
             for item in v:
@@ -1241,8 +1265,7 @@ class Parser(object):
 
     def _config_values(self, parsed):
         pc = parsed.copy()
-        todelete = set()
-        for key, value in iteritems(parsed):
+        for key, value in parsed:
             if isinstance(value, Caster) and isinstance(value._cast, _ConfigCaster):
                 for k, v in value.getvalue():
                     # XXX redundant
@@ -1253,25 +1276,16 @@ class Parser(object):
                         # developer didn't specify this argument
                         continue
 
-                    c = current_reader.fresh_copy()
+                    is_specified = current_reader.is_specified()
+                    if is_specified:
+                        current_reader = current_reader.fresh_copy()
 
-                    c.consume_or_skip(v)
+                    current_reader.consume_or_skip(v)
 
                     # what if duplicates in config?
-                    if k in pc:
-                        v = pc[k]
-                        if not isinstance(v, list):
-                            if v.is_specified():
-                                v = [v, c]
-                            else:
-                                v = c
-                        else:
-                            v = v + [c]
-                    else:
-                        assert False
-                        v = c
 
-                    pc[k] = v
+                    if is_specified:
+                        pc[k] = current_reader
 
                 del pc[key]  # ignore config as argument now XXX
 
@@ -1279,7 +1293,7 @@ class Parser(object):
 
     def _assign(self, combined):
         assigned = {}
-        for key, values in iteritems(combined):
+        for key, values in combined:
             try:
                 if key not in self._multiple:
                     value = values.getvalue()
@@ -1301,7 +1315,7 @@ class Parser(object):
         return assigned
 
     def _check_multiple(self, assigned):
-        for key, values in iteritems(assigned):
+        for key, values in assigned:
             if isinstance(values, list) and key not in self._multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
@@ -1365,10 +1379,10 @@ class Parser(object):
         return args
 
     def _combine_with_defaults(self, user_args):
-        copy = self._readers.copy()
+        copy = Multidict(self._readers.copy())
 
-        for k, v in iteritems(user_args):
-            copy[k] = v
+        for k, v in user_args:
+            copy.overwrite(k, v)
 
         return copy
 
@@ -1380,7 +1394,7 @@ class Parser(object):
             user_args = self._combine_with_defaults(user_args)
             user_args = self._config_values(user_args)
             self._check_multiple(user_args)
-            #self._help_if_necessary(user_args)
+            # XXX self._help_if_necessary(user_args)
             self._verify(user_args)
             assigned = self._assign(user_args)
             self._assign_to_store(assigned)
