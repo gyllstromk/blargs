@@ -1,3 +1,5 @@
 Blargs command line parser.
 
-Docs: http://readthedocs.org/docs/blargs/en/latest/
+Code: https://github.com/gyllstromk/blargs
+
+Docs: http://packages.python.org/blargs/
