@@ -242,14 +242,27 @@ class TestCase(unittest.TestCase):
             vals = p._process_command_line(['--%s' % port, '2222'])
             self.assertEqual(vals[port], 2222)
 
+    def test_help(self):
+        p = Parser()
+        p.int('a').described_as('a fun variable')
+        p.float('b').described_as('yet another a fun variable')
+        p.float('c').described_as('')
+        p['a'].requires('b')
+        p['b'].conflicts('a', 'c')
+        p['b'].requires('b')
+        p.out = StringIO()
+
+        p.print_help()
+        self.assertEqual(p.out.getvalue(), 'Usage: test.py [--a <int>] [--c <float>] [--b <float>] [--help/-h]\nOptions: (! denotes required argument)\n   --a <int>     a fun variable                                         Requires --b\n   --c <float>                                                                      \n   --b <float>   yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h     Print help message.                                                \n')
+
     def test_error_printing(self):
         def create(strio):
             with Parser(locals()) as p:
-                p._out = strio
+                p.out = strio
                 p._sys_exit_error = FakeSystemExit
                 p.require_one(
                     p.all_if_any(
-                        p.int('a'),
+                        p.int('a').described_as('a variable'),
                         p.int('b'),
                     ),
                     p.only_one_if_any(
@@ -264,10 +277,7 @@ class TestCase(unittest.TestCase):
 
         s = StringIO()
         self.assertRaises(FakeSystemExit, create, s)
-        self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified
-usage: test.py
-[--a <int>] [--yi/-y <option>] [--c <float>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <range>]
-'''.format(sys.argv[0]))
+        self.assertEqual(s.getvalue(), '''Error: [--a, --b, --c, --d] not specified\nUsage: test.py [--a <int>] [--yi/-y <option>] [--c <float>] [--b <int>] [--e <range>] [--help/-h] [--x <int>] [--z <float>] [--d <range>]\n'''.format(sys.argv[0]))
 
     def test_url(self):
         p = Parser()
@@ -289,7 +299,9 @@ usage: test.py
     def test_requires_and_default(self):
         p = Parser()
         p.int('a').default(3)
-        p.int('b').requires(p['a'])
+        b = p.int('b').requires(p['a'])
+        b.requires(p['a'])
+        self.assertEqual(len(b._getreqs()), 1)
         p._process_command_line(['--b', '5'])
 
     def test_complex1(self):
@@ -963,6 +975,10 @@ usage: test.py
                     ['--x', 'hi'] + reduce(list.__add__, map(list, v)))
 
     def test_conflicts(self):
+        p = Parser()
+        p.int('x').conflicts(p['x'])
+        self.assertRaises(ConflictError, p._process_command_line, ['--x', '3'])
+
         def create():
             p = Parser()
             p.int('x').conflicts(p.int('y'))

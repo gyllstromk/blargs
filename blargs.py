@@ -421,6 +421,18 @@ class CallableCondition(Condition):
         return x
 
 
+def _daisy_chained(f):
+    @wraps(f)
+    def newfunc(self, *args, **kw):
+        result = f(self, *args, **kw)
+        if result is not None:
+            return result
+
+        return self
+
+    return newfunc
+
+
 class Option(Condition):
     def __init__(self, argname, parser):
         ''' Do not construct directly, as it will not be tethered to a
@@ -433,6 +445,7 @@ class Option(Condition):
         self._parser = parser
         self._conditions = []
         self._allows_multiple = False
+        self._description = None
 
     def copy(self):
         c = super(Option, self).copy()
@@ -441,6 +454,11 @@ class Option(Condition):
         c._conditions = self._conditions
         return c
 
+    @_daisy_chained
+    def described_as(self, description):
+        self._description = description
+
+    @_daisy_chained
     def requires(self, *conditions):
         ''' Specifiy other options/conditions which this argument requires.
 
@@ -449,8 +467,8 @@ class Option(Condition):
         '''
 
         [self._parser._set_requires(self.argname, x) for x in conditions]
-        return self
 
+    @_daisy_chained
     def conflicts(self, *conditions):
         ''' Specifiy other conditions which this argument conflicts with.
 
@@ -460,7 +478,6 @@ class Option(Condition):
         '''
 
         [self._parser._set_conflicts(self.argname, x) for x in conditions]
-        return self
 
     def __str__(self):
         v = '%s%s' % (self._parser._double_prefix, self.argname)
@@ -469,6 +486,7 @@ class Option(Condition):
             v += '/%s%s' % (self._parser._single_prefix, alias)
         return v
 
+    @_daisy_chained
     def shorthand(self, alias):
         ''' Set shorthand for this argument. Shorthand arguments are 1
         character in length and are prefixed by a single '-'. For example:
@@ -482,13 +500,13 @@ class Option(Condition):
         '''
 
         self._parser._add_shorthand(self.argname, alias)
-        return self
 
+    @_daisy_chained
     def default(self, value):
         ''' Provide a default value for this argument. '''
         self._parser._set_default(self.argname, value)
-        return self
 
+    @_daisy_chained
     def environment(self):
         ''' Pull argument value from OS environment if unspecified. The case of
         the argument name, all lower, and all upper are all tried. For example,
@@ -515,50 +533,45 @@ class Option(Condition):
                 default = os.environ.get(self.argname.upper())
 
         if default is not None:
+            # XXX not tested
             return self.default(default)
 
-        return self
-
-    def name(self):
-        return self.argname
-
+    @_daisy_chained
     def cast(self, cast):
         ''' Provide a casting value for this argument. '''
 
         self._parser._readers[self.argname] = Caster(
                 self._parser._readers[self.argname], cast)
 
-        return self
-
+    @_daisy_chained
     def required(self):
         ''' Indicate that this argument is required. '''
 
         self._parser._set_required(self.argname)
-        return self
 
+    @_daisy_chained
     def if_(self, condition):
         ''' Argument is required if ``conditions``. '''
         self._parser._set_required(self.argname, [-condition])
-        return self
 
+    @_daisy_chained
     def unless(self, condition):
         ''' Argument is required unless ``conditions``. '''
 
         self._parser._set_required(self.argname, [condition])
-        return self
 
+    @_daisy_chained
     def unspecified_default(self):
         ''' Indicate that values passed without argument labels will be
         attributed to this argument. '''
 
         self._parser._set_unspecified_default(self.argname)
-        return self
 
+    @_daisy_chained
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
 
         self._allows_multiple = True
-        return self
 
     # --- conditions
 
@@ -603,8 +616,7 @@ class Option(Condition):
         return self._parser._conflicts.get(self, [])
 
     def _getreqs(self):
-        return self._requires
-#        return self._parser._requires.get(self, [])
+       return self._parser._requires.get(self, [])
 
     def _alias(self):
         return self._parser._source_to_alias.get(self.argname)
@@ -788,12 +800,12 @@ class Group(Option):
 
     def __str__(self):
         return ', '.join([str(name) for name in self._names])
-
+            
 
 class Parser(object):
     ''' Command line parser. '''
 
-    def __init__(self, store=None, default_help=True):
+    def __init__(self, store=None):
         self._options = {}
         self._readers = {}
         self._extras = []
@@ -825,13 +837,12 @@ class Parser(object):
         self._help_prefix = None
 
         self._sys_exit_error = SystemExit
-        self._out = sys.stdout
+        self.out = sys.stdout # XXX not documented
 
         # set by user
         self._init_user_set(store)
 
-        if default_help:
-            self.flag('help').shorthand('h')
+        self.flag('help').shorthand('h').described_as('Print help message.')
 
     def _init_user_set(self, store=None):
         if store is None:
@@ -1104,6 +1115,7 @@ class Parser(object):
                 item = self._options[item]
             newreplacements.append(item)
 
+        # XXX [] allows redundancy?
         self._required.setdefault(arg, []).extend(newreplacements)
 
     @localize
@@ -1379,7 +1391,7 @@ class Parser(object):
         return self._store
 
     def emit(self, *args):
-        print(*args, file=self._out)
+        print(*args, file=self.out)
 
     def process_command_line(self, args=None):
         try:
@@ -1387,12 +1399,30 @@ class Parser(object):
         except ArgumentError as e:
             self.bail(e)
 
+    def _usage(self):
+        return ('Usage: %s ' % sys.argv[0]) + ' '.join('[%s]' %
+                self._label(value) for value in self._options.values())
+
+    def _print_table(self, t):
+        # XXX what about empty list?
+        column_max_lengths = [len(x) for x in t[0]]
+
+        for row in t[1:]:
+            column_max_lengths = [max(column_max_lengths[i], len(column)) for i, column
+                    in enumerate(row)]
+
+        for row in t:
+            line = ''
+            for i, column in enumerate(row):
+                fmt = '   %-' + str(column_max_lengths[i]) + 's'
+                line += fmt
+
+            self.emit(line % row)
+
     def bail(self, e):
         msg = []
         msg.append('Error: ' + str(e))
-        msg.append('usage: %s' % sys.argv[0])
-        msg.append(' '.join('[%s]' % self._label(value) for value in
-            self._options.values()))
+        msg.append(self._usage())
 
         self.emit('\n'.join(msg))
 
@@ -1408,13 +1438,13 @@ class Parser(object):
     @_verify_args_exist
     @_names_to_options
     def _set_requires(self, a, b):
-        self._requires.setdefault(a, []).append(b)
+        self._requires.setdefault(a, set()).add(b)
 
     @_localize_all
     @_verify_args_exist
     @_names_to_options
     def _set_conflicts(self, a, b):
-        self._conflicts.setdefault(a, []).append(b)
+        self._conflicts.setdefault(a, set()).add(b)
 
     def __enter__(self):
         return self
@@ -1453,32 +1483,38 @@ class Parser(object):
         return pkey
 
     def print_help(self):
+        self.emit(self._usage())
+
         if self._help_prefix:
             self.emit(self._help_prefix)
 
-        self.emit('Arguments: (! denotes required argument)')
+        self.emit('Options: (! denotes required argument)')
         column_width = -1
-        for key, value in iteritems(self._options):
-            column_width = max(column_width, len(self._label(value)))
 
-        fmt = '   %-' + str(column_width) + 's'
+        labels = []
+        for key, opt in iteritems(self._options):
+            name = self._label(opt)
+            desc = ''
+            if opt._description is not None:
+                desc = opt._description
 
-        for key, value in iteritems(self._options):
-            msg = fmt % self._label(value)
+            if opt._isrequired():
+                name = '!' + name
 
-            if value._isrequired():
-                msg = '!' + msg[1:]
-
-            conflicts = value._getconflicts()
+            conflict_str = ''
+            conflicts = opt._getconflicts()
             if conflicts:
-                msg += ' (Conflicts with %s)' % ', '.join(str(item) for item in
+                conflict_str = 'Conflicts with %s' % ', '.join(str(item) for item in
                         conflicts)
 
-            reqs = value._getreqs()
+            requirement_str = ''
+            reqs = opt._getreqs()
             if reqs:
-                msg += ' (Requires %s)' % ', '.join(str(item) for item in reqs)
+                requirement_str = 'Requires %s' % ', '.join(str(item) for item in reqs)
 
-            self.emit(msg)
+            labels.append((name, desc, conflict_str, requirement_str))
+
+        self._print_table(labels)
 
 
 __all__ = ['Parser']
