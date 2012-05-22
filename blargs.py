@@ -432,6 +432,7 @@ class Option(Condition):
         self.argname = argname
         self._parser = parser
         self._conditions = []
+        self._allows_multiple = False
 
     def copy(self):
         c = super(Option, self).copy()
@@ -556,7 +557,7 @@ class Option(Condition):
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
 
-        self._parser._set_multiple(self.argname)
+        self._allows_multiple = True
         return self
 
     # --- conditions
@@ -804,7 +805,6 @@ class Parser(object):
         self._options = {}
         self._readers = {}
         self._option_labels = {}
-        self._multiple = set()
         self._casts = {}
         self._extras = []
         self._unspecified_default = None
@@ -1290,7 +1290,7 @@ class Parser(object):
         assigned = {}
         for key, values in combined:
             try:
-                if key not in self._multiple:
+                if not self._options[key]._allows_multiple:
                     value = values.getvalue()
                 else:
                     if not isinstance(values, list):
@@ -1311,7 +1311,7 @@ class Parser(object):
 
     def _check_multiple(self, assigned):
         for key, values in assigned:
-            if isinstance(values, list) and key not in self._multiple:
+            if isinstance(values, list) and not self._options[key]._allows_multiple:
                 raise MultipleSpecifiedArgumentError(('%s specified multiple' +
                     ' times') % self._options[key])
 
@@ -1420,11 +1420,6 @@ class Parser(object):
         if self._suppress_sys_exit:
             raise FakeSystemExit
         sys.exit(1)
-
-    @localize
-    @_options_to_names
-    def _set_multiple(self, name):
-        self._multiple.add(name)
 
     @localize
     @_options_to_names
