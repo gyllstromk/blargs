@@ -65,7 +65,7 @@ Quick start
 
 .. need to add links here
 
-The preferred use of :py:class:`Parser` is via the ``with`` idiom, as follows:
+The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
 
 ::
 
@@ -259,7 +259,7 @@ To use:
 
 Now the value of arg1 is ``['hello', 'world']``.
 
-Note: by indicating ``multiple``, the variable is stored as a ``list`` *even* if only
+Note: by indicating :meth:`Option.multiple`, the variable is stored as a ``list`` *even* if only
 one instance is specified by the user.
 
 Indicating default values or environment variables
@@ -317,7 +317,22 @@ Now, an argument without a label will be saved to ``arg1``:
   python test.py --arg2 world hello   # arg1 = 'hello', arg2 = 'world'
 
 Note that to avoid ambiguity, only one argument type may be an
-``unspecified_default``.
+:meth:`Option.unspecified_default`.
+
+Files
+-----
+
+Files and directories can be easily specified:
+
+::
+
+    with Parser(locals()) as p:
+        p.file('input_file')
+        p.file('output_file', mode='w')
+        p.directory('src_dir')
+        p.directory('dest_dir', create=True)
+
+When parsed, ``input_file`` and ``output_file`` will both be open file pointers. ``src_dir`` is returned as the user-provided ``str``, and will be checked to ensure that the directory provided by the user is in fact an existing, valid directory, while ``dest_dir`` will be created if it does not exist. Both 
 
 Creating your own types
 -----------------------
@@ -363,7 +378,7 @@ Argument must be specified if ``condition``:
 unless
 ------
 
-Argument must be specified ``unless`` ``condition``.
+Argument must be specified :meth:`Option.unless` ``condition``.
 
 ::
 
@@ -375,7 +390,7 @@ Argument must be specified ``unless`` ``condition``.
 requires
 --------
 
-We described ``requires`` previously, but here we show that it also works with conditional expressions.
+We described :py:meth:`Option.requires` previously, but here we show that it also works with conditional expressions.
 
 If argument is specified, then ``condition`` must be true;
 
@@ -389,7 +404,7 @@ If argument is specified, then ``condition`` must be true;
 and/or
 ------
 
-Build conditions via logical operators ``and_`` and ``or_``:
+Build conditions via logical operators :meth:`and_` and :meth:`or_`:
 
 ::
 
@@ -416,10 +431,10 @@ Require at least one (up to all) of the subsequent arguments:
 
     with Parser(locals()) as p:
         p.at_least_one(
-        p.str('arg1'),
-        p.str('arg2'),
-        p.str('arg3')
-    )
+            p.str('arg1'),
+            p.str('arg2'),
+            p.str('arg3')
+        )
 
 Mutual exclusion
 ----------------
@@ -466,32 +481,38 @@ One and only one of the arguments must be specified:
 Complex Dependencies
 ====================
 
+::
+
     with Parser(locals()) as p:
         p.at_least_one(            # at least one of
-            p.only_one_if_any(       # 'arg1', 'arg2', and/or 'arg3'
-            p.int('arg1'),         # must be specified, but
-            p.flag('arg2'),        # 'arg1' and 'arg2' may not
-        ),                       # both be specified
+            p.only_one_if_any(     # 'arg1', 'arg2', and/or 'arg3'
+                p.int('arg1'),     # must be specified, but
+                p.flag('arg2'),    # 'arg1' and 'arg2' may not
+            ),                     # both be specified
             p.str('arg3'),
         )
 
->>> with Parser(locals() as p:
-...     p.require_one(
-...         p.all_if_any(
-...             p.only_one_if_any(
-...                 p.flag('a'),
-...                 p.flag('b'),
-...             ),
-...             p.flag('c'),
-...         ),
-...         p.only_one_if_any(
-...             p.all_if_any(
-...                 p.flag('d'),
-...                 p.flag('e'),
-...             ),
-...             p.flag('f'),
-...         ),
-...     )
+
+::
+
+    with Parser(locals() as p:
+        p.require_one(
+            p.all_if_any(
+                p.only_one_if_any(
+                    p.flag('a'),
+                    p.flag('b'),
+                ),
+                p.flag('c'),
+            ),
+            p.only_one_if_any(
+                p.all_if_any(
+                    p.flag('d'),
+                    p.flag('e'),
+                ),
+                p.flag('f'),
+            ),
+        )
+
 
 Accepts these combinations:
 
@@ -548,12 +569,12 @@ Customizing
 Indicating label style
 ----------------------
 
-By default, ``--`` denotes a full argument while ``-`` denotes the shorthand/alias variant. This can be replaced via :func:`set_single_prefix` and :func:`set_double_prefix`.
+By default, ``--`` denotes a full argument while ``-`` denotes the shorthand/alias variant. This can be replaced via :py:meth:`Parser.set_single_prefix` and :meth:`Parser.set_double_prefix`.
 
 Setting help function
 ---------------------
 
-The :func:`set_help_prefix` allows you to specify the content that appears before the argument list when users trigger the ``--help`` command.
+The :meth:`Parser.set_help_prefix` allows you to specify the content that appears before the argument list when users trigger the ``--help`` command.
 
 API
 ===
@@ -564,11 +585,9 @@ API
 ..	autoclass:: Option
   :members:
 
-.. ..	autoclass:: IOParser
-..   :members:
-
 Exceptions
 ----------
+
 .. autoclass::  ArgumentError
 .. autoclass::  FormatError
 .. autoclass::  MissingRequiredArgumentError

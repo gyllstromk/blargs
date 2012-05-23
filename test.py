@@ -164,8 +164,8 @@ b=3
 
         self.assertRaises(MissingValueError, create()._process_command_line, ['--a'])
         self.assertRaises(IOError, create()._process_command_line, ['--a', 'aaa'])
-        vals = create()._process_command_line(['--a', 'test.py'])
-        with open('test.py') as f:
+        vals = create()._process_command_line(['--a', sys.argv[0]])
+        with open(sys.argv[0]) as f:
             self.assertEqual(vals['a'].read(), f.read())
 
         def create():

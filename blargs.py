@@ -326,7 +326,7 @@ class Condition(object):
         self._and = True
         self._neg = False
 
-    def copy(self):
+    def _copy(self):
         c = self.__new__(self.__class__)
         c._other_conditions = self._other_conditions[:]
         c._and = self._and
@@ -334,7 +334,7 @@ class Condition(object):
         return c
 
     def __neg__(self):
-        c = self.copy()
+        c = self._copy()
         c._neg = True
         return c
 
@@ -345,12 +345,12 @@ class Condition(object):
         if not self._and:
             raise ValueError('and/or both specified')
 
-        c = self.copy()
+        c = self._copy()
         c._other_conditions.append(condition)
         return c
 
     def or_(self, condition):
-        c = self.copy()
+        c = self._copy()
         c._other_conditions.append(condition)
         c._and = False
         return c
@@ -372,15 +372,15 @@ class Condition(object):
         return result
 
 
-class CallableCondition(Condition):
+class _CallableCondition(Condition):
     def __init__(self, call, main, other):
-        super(CallableCondition, self).__init__()
+        super(_CallableCondition, self).__init__()
         self._call = call
         self._main = main
         self._other = other
 
-    def copy(self):
-        c = super(CallableCondition, self).copy()
+    def _copy(self):
+        c = super(_CallableCondition, self)._copy()
         c._call = self._call
         c._main = self._main
         c._other = self._other
@@ -421,24 +421,11 @@ class CallableCondition(Condition):
         return x
 
 
-def _daisy_chained(f):
-    @wraps(f)
-    def newfunc(self, *args, **kw):
-        result = f(self, *args, **kw)
-        if result is not None:
-            return result
-
-        return self
-
-    return newfunc
-
-
 class Option(Condition):
-    def __init__(self, argname, parser):
-        ''' Do not construct directly, as it will not be tethered to a
-        :class:`Parser` object and thereby will not be handled in argument
-        parsing. '''
+    ''' Do not construct directly, as it will not be tethered to a
+    :class:`Parser` object and so will not be handled in argument parsing. '''
 
+    def __init__(self, argname, parser):
         super(Option, self).__init__()
 
         self.argname = argname
@@ -447,30 +434,40 @@ class Option(Condition):
         self._allows_multiple = False
         self._description = None
 
-    def copy(self):
-        c = super(Option, self).copy()
+    def _copy(self):
+        c = super(Option, self)._copy()
         c.argname = self.argname
         c._parser = self._parser
         c._conditions = self._conditions
         return c
 
-    @_daisy_chained
     def described_as(self, description):
-        self._description = description
+        '''
 
-    @_daisy_chained
+        Add a description to this argument, to be displayed when users trigger the help message.
+
+        :param description: description of argument
+
+        '''
+
+        self._description = description
+        return self
+
     def requires(self, *conditions):
-        ''' Specifiy other options/conditions which this argument requires.
+        '''
+        
+        Specify other options/conditions which this argument requires.
 
         :param conditions: required conditions
-        :type others: sequence of either :class:`Option` or :class:`Condition`s
+        :type others: sequence of either :class:`Option` or :class:`Condition`
+
         '''
 
         [self._parser._set_requires(self.argname, x) for x in conditions]
+        return self
 
-    @_daisy_chained
     def conflicts(self, *conditions):
-        ''' Specifiy other conditions which this argument conflicts with.
+        ''' Specify other conditions which this argument conflicts with.
 
         :param conditions: conflicting options/conditions
         :type conditions: sequence of either :class:`Option` or
@@ -478,43 +475,43 @@ class Option(Condition):
         '''
 
         [self._parser._set_conflicts(self.argname, x) for x in conditions]
+        return self
 
-    def __str__(self):
-        v = '%s%s' % (self._parser._double_prefix, self.argname)
-        alias = self._alias()
-        if alias:
-            v += '/%s%s' % (self._parser._single_prefix, alias)
-        return v
-
-    @_daisy_chained
     def shorthand(self, alias):
-        ''' Set shorthand for this argument. Shorthand arguments are 1
+        '''
+        
+        Set shorthand for this argument. Shorthand arguments are 1
         character in length and are prefixed by a single '-'. For example:
 
-        >>> parser.str('option').shorthand('o')
+        ::
+
+            parser.str('option').shorthand('o')
 
         would cause '--option' and '-o' to be alias argument labels when
         invoked on the command line.
 
         :param alias: alias of argument
+
         '''
 
         self._parser._add_shorthand(self.argname, alias)
+        return self
 
-    @_daisy_chained
     def default(self, value):
         ''' Provide a default value for this argument. '''
         self._parser._set_default(self.argname, value)
+        return self
 
-    @_daisy_chained
     def environment(self):
         ''' Pull argument value from OS environment if unspecified. The case of
         the argument name, all lower, and all upper are all tried. For example,
         if the argument name is `Port`, the following names will be used for
         environment lookups: `Port`, `port`, `PORT`.
 
-        >>> with Parser(locals()) as p:
-        ...    p.int('port').environment()
+        ::
+
+            with Parser(locals()) as p:
+                p.int('port').environment()
 
         Both command lines work:
 
@@ -536,42 +533,45 @@ class Option(Condition):
             # XXX not tested
             return self.default(default)
 
-    @_daisy_chained
+        return self
+
     def cast(self, cast):
         ''' Provide a casting value for this argument. '''
 
         self._parser._readers[self.argname] = Caster(
                 self._parser._readers[self.argname], cast)
 
-    @_daisy_chained
+        return self
+
     def required(self):
         ''' Indicate that this argument is required. '''
 
         self._parser._set_required(self.argname)
+        return self
 
-    @_daisy_chained
     def if_(self, condition):
         ''' Argument is required if ``conditions``. '''
         self._parser._set_required(self.argname, [-condition])
+        return self
 
-    @_daisy_chained
     def unless(self, condition):
         ''' Argument is required unless ``conditions``. '''
 
         self._parser._set_required(self.argname, [condition])
+        return self
 
-    @_daisy_chained
     def unspecified_default(self):
         ''' Indicate that values passed without argument labels will be
         attributed to this argument. '''
 
         self._parser._set_unspecified_default(self.argname)
+        return self
 
-    @_daisy_chained
     def multiple(self):
         ''' Indicate that the argument can be specified multiple times. '''
 
         self._allows_multiple = True
+        return self
 
     # --- conditions
 
@@ -584,7 +584,7 @@ class Option(Condition):
         return all(x.is_resolvable() for x in v)
 
     def _make_condition(self, func, other):
-        return CallableCondition(func, self, other)
+        return _CallableCondition(func, self, other)
 
     def __le__(self, other):
         return self._make_condition(operator.__le__, other)
@@ -620,6 +620,13 @@ class Option(Condition):
 
     def _alias(self):
         return self._parser._source_to_alias.get(self.argname)
+
+    def __str__(self):
+        v = '%s%s' % (self._parser._double_prefix, self.argname)
+        alias = self._alias()
+        if alias:
+            v += '/%s%s' % (self._parser._single_prefix, alias)
+        return v
 
 
 # ---------- Argument readers ---------- #
@@ -903,13 +910,18 @@ class Parser(object):
 # --- types --- #
 
     def config(self, name):
-        ''' Add configuration file, whose key/value pairs will provide/replace
-        any arguments created for this parser. For example:
+        '''
+        
+        Add configuration file, whose key/value pairs will provide/replace any
+        arguments created for this parser. Configuration format should be INI.
+        For example:
 
-            >>> with Parser() as p:
-            ...   p.int('a')
-            ...   p.str('b')
-            ...   p.config('conf')
+            ::
+
+                with Parser() as p:
+                    p.int('a')
+                    p.str('b')
+                    p.config('conf')
 
             Now, arg ``a`` can be specfied on the command line, or in the
             configuration file passed to ``conf``. For example:
@@ -977,8 +989,10 @@ class Parser(object):
         ''' Range type. Accepts similar values to that of python's py:`range`
             and py:`xrange`. Accepted delimiters are space, -, and :.
 
-            >>> with Parser() as p:
-            ...   p.range('values')
+            ::
+
+                with Parser() as p:
+                    p.range('values')
 
             Now accepts:
 
@@ -995,8 +1009,10 @@ class Parser(object):
     def multiword(self, name):
         ''' Accepts multiple terms as an argument. For example:
 
-            >>> with Parser() as p:
-            ...   p.multiword('multi')
+            ::
+
+                with Parser() as p:
+                    p.multiword('multi')
 
             Now accepts:
 
@@ -1029,11 +1045,14 @@ class Parser(object):
 
         The example below implements a file copy operation:
 
-        >>> with Parser(locals()) as p:
-        ...     p.file('input_file')
-        ...     p.file('output_file', mode='w')
-        ...
-        ... output_file.write(input_file.read())
+        ::
+
+            with Parser(locals()) as p:
+                p.file('input_file')
+                p.file('output_file', mode='w')
+                
+            output_file.write(input_file.read())
+
         '''
 
         return self.multiword(name).cast(_FileOpenerCaster(mode, buffering))
@@ -1329,7 +1348,7 @@ class Parser(object):
             if arg._is_satisfied(assigned):
                 for v in deps:
                     if not v._is_satisfied(assigned):
-                        if isinstance(v, CallableCondition):
+                        if isinstance(v, _CallableCondition):
                             raise ConditionError(arg.argname, v)
                         raise DependencyError(arg, v)
 
@@ -1390,10 +1409,30 @@ class Parser(object):
 
         return self._store
 
-    def emit(self, *args):
+    def _emit(self, *args):
         print(*args, file=self.out)
 
     def process_command_line(self, args=None):
+        '''
+
+        Parses the command line specified by the user. Consider this a manual alternative to the ``with`` idiom. The following examples are equivalent:
+
+        ::
+
+            with Parser(locals()) as p:
+                p.int('var')
+
+            print var
+
+        ::
+
+            p = Parser(locals())
+            p.int('var')
+            p.process_command_line()
+            print var
+
+        '''
+
         try:
             return self._process_command_line(args)
         except ArgumentError as e:
@@ -1417,14 +1456,14 @@ class Parser(object):
                 fmt = '   %-' + str(column_max_lengths[i]) + 's'
                 line += fmt
 
-            self.emit(line % row)
+            self._emit(line % row)
 
     def bail(self, e):
         msg = []
         msg.append('Error: ' + str(e))
         msg.append(self._usage())
 
-        self.emit('\n'.join(msg))
+        self._emit('\n'.join(msg))
 
         raise self._sys_exit_error(1)
 
@@ -1483,12 +1522,12 @@ class Parser(object):
         return pkey
 
     def print_help(self):
-        self.emit(self._usage())
+        self._emit(self._usage())
 
         if self._help_prefix:
-            self.emit(self._help_prefix)
+            self._emit(self._help_prefix)
 
-        self.emit('Options: (! denotes required argument)')
+        self._emit('Options: (! denotes required argument)')
         column_width = -1
 
         labels = []
