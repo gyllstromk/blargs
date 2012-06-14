@@ -890,7 +890,7 @@ class TestCase(unittest.TestCase):
         try:
             p._process_command_line(['--' + arg])
         except UnspecifiedArgumentError as e:
-            self.assertEqual(unicode(e), UnspecifiedArgumentError.message.format(arg))
+            self.assertEqual(str(e), UnspecifiedArgumentError.message.format(arg))
 
     def test_enum(self):
         def create():
