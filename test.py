@@ -885,7 +885,12 @@ class TestCase(unittest.TestCase):
 
     def test_unspecified(self):
         p = Parser()
-        self.assertRaises(UnspecifiedArgumentError, p._process_command_line, ['--b'])
+        arg = 'b'
+        self.assertRaises(UnspecifiedArgumentError, p._process_command_line, ['--' + arg])
+        try:
+            p._process_command_line(['--' + arg])
+        except UnspecifiedArgumentError as e:
+            self.assertEqual(unicode(e), UnspecifiedArgumentError.message.format(arg))
 
     def test_enum(self):
         def create():

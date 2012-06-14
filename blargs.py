@@ -276,9 +276,11 @@ class ManyAllowedNoneSpecifiedArgumentError(ArgumentError):
 class UnspecifiedArgumentError(ArgumentError):
     ''' User supplies argument that isn't specified. '''
 
+    message = 'illegal option {0}'
+
     def __init__(self, arg):
-        super(UnspecifiedArgumentError, self).__init__('illegal option %s' %
-                arg)
+        super(UnspecifiedArgumentError,
+                self).__init__(UnspecifiedArgumentError.message.format(arg))
 
 
 class MultipleSpecifiedArgumentError(ArgumentError):
@@ -1238,6 +1240,8 @@ class Parser(object):
                 current_reader = self._readers.get(argument_name)
 
                 if current_reader is None:
+                    if argument_name is None:
+                        argument_name = arg
                     raise UnspecifiedArgumentError(argument_name)
 
                 current_reader = current_reader.fresh_copy()
