@@ -25,9 +25,11 @@ optparse from Python's standard library. The main distinctions are:
 
 Blargs has been tested on Python2.6 to Python3.2 and PyPy.
 
-Note: blargs is currently still in *beta*. You can help by submitting bugs here_!
+Contributions are always welcome! You can help by submitting bugs here_ or forking_ on Github_!
 
 .. _here: https://github.com/gyllstromk/blargs/issues/new
+.. _forking: https://github.com/gyllstromk/blargs
+.. _Github: http://github.com
 
 Installation
 ============
@@ -74,8 +76,8 @@ The preferred use of :class:`Parser` is via the ``with`` idiom, as follows:
         p.str('arg2')
         p.flag('arg3')
 
-        print 'Out of with statement; sys.argv is now parsed!'
-        print arg1, arg2, arg3
+    print 'Out of with statement; sys.argv is now parsed!'
+    print arg1, arg2, arg3
 
 
 Note the use of ``locals`` is limited to the global scope; use a dictionary otherwise, getting argument values using the argument names as keys.
