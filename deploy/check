@@ -1,0 +1,40 @@
+#!/bin/zsh
+
+#(cd doc; make clean ; make html; curl "http://packages.python.org/blargs/" | diff _build/html/index.html - )
+#if [ $? != 0 ]
+#then
+	#exit 1
+#else
+	#echo 'Doc ok'
+#fi
+
+tox
+if [ $? != 0 ]
+then
+	exit 1
+else
+	echo 'tests ok'
+fi
+
+git checkout master
+git merge exp
+python2.7 deploy/update_version.py
+
+if [ $? != 0 ]
+then
+	exit 1
+fi
+
+# just in case we broke it
+tox
+
+git commit -a -m "update version"
+
+# All post version stuff
+(cd doc; make clean; make html)
+python setup.py upload_sphinx
+python setup.py sdist upload
+
+git push
+git checkout exp
+git merge master
