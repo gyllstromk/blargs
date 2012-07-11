@@ -1399,11 +1399,12 @@ class Parser(object):
             args = self._get_args(args)
             tokenized = self._tokenize(args)
             user_args = self._parse(tokenized)
+            self._help_if_necessary(user_args)
             user_args = self._combine_with_defaults(user_args)
             user_args = self._config_values(user_args)
             self._check_multiple(user_args)
-            # XXX self._help_if_necessary(user_args)
             self._verify(user_args)
+
             assigned = self._assign(user_args)
             self._assign_to_store(assigned)
         except ArgumentError as e:

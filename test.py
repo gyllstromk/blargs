@@ -250,9 +250,11 @@ class TestCase(unittest.TestCase):
         p['a'].requires('b')
         p['b'].conflicts('a', 'c')
         p['b'].requires('b')
+        p._sys_exit_error = FakeSystemExit
         p.out = StringIO()
 
-        p.print_help()
+        self.assertRaises(FakeSystemExit, p._process_command_line, ['--help'])
+
         self.assertEqual(p.out.getvalue(), 'Usage: %s [--a <int>] [--c <float>] [--b <float>] [--help/-h]\nOptions: (! denotes required argument)\n   --a <int>     a fun variable                                         Requires --b\n   --c <float>                                                                      \n   --b <float>   yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h     Print help message.                                                \n' % sys.argv[0])
 
     def test_error_printing(self):
