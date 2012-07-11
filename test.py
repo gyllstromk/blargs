@@ -247,6 +247,7 @@ class TestCase(unittest.TestCase):
         p.int('a').described_as('a fun variable')
         p.float('b').described_as('yet another a fun variable')
         p.float('c').described_as('')
+        p.float('d').required()
         p['a'].requires('b')
         p['b'].conflicts('a', 'c')
         p['b'].requires('b')
@@ -255,7 +256,7 @@ class TestCase(unittest.TestCase):
 
         self.assertRaises(FakeSystemExit, p._process_command_line, ['--help'])
 
-        self.assertEqual(p.out.getvalue(), 'Usage: %s [--a <int>] [--c <float>] [--b <float>] [--help/-h]\nOptions: (! denotes required argument)\n   --a <int>     a fun variable                                         Requires --b\n   --c <float>                                                                      \n   --b <float>   yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h     Print help message.                                                \n' % sys.argv[0])
+        self.assertEqual(p.out.getvalue(), 'Usage: %s [--a <int>] [--c <float>] [--b <float>] [--help/-h] [--d <float>]\nOptions: (! denotes required argument)\n   --a <int>      a fun variable                                         Requires --b\n   --c <float>                                                                       \n   --b <float>    yet another a fun variable   Conflicts with --a, --c   Requires --b\n   --help/-h      Print help message.                                                \n   !--d <float>                                                                      \n' % sys.argv[0])
 
     def test_error_printing(self):
         def create(strio):
